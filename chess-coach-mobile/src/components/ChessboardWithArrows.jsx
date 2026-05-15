@@ -16,10 +16,43 @@ export default function ChessboardWithArrows({
   arrows = [],
   ...props
 }) {
+  const [selectedSquare, setSelectedSquare] = useState(null);
   const [dragStart, setDragStart] = useState(null);
   const [dragCurrent, setDragCurrent] = useState(null);
+  const selectedSquareRef = useRef(null);
+  const dragStartRef = useRef(null);
+  const onMoveRef = useRef(onMove);
+  const pieceMapRef = useRef({});
   const boardContainerRef = useRef(null);
   const squareSize = boardSize / 8;
+
+  const pieceMap = React.useMemo(() => {
+    const pieces = {};
+    const boardFen = fen?.split(" ")[0] || "";
+    const rows = boardFen.split("/");
+
+    rows.forEach((row, rowIndex) => {
+      let fileIndex = 0;
+
+      row.split("").forEach((char) => {
+        const emptySquares = Number(char);
+        if (Number.isInteger(emptySquares) && emptySquares > 0) {
+          fileIndex += emptySquares;
+          return;
+        }
+
+        const file = String.fromCharCode(97 + fileIndex);
+        const rank = 8 - rowIndex;
+        pieces[`${file}${rank}`] = char;
+        fileIndex += 1;
+      });
+    });
+
+    return pieces;
+  }, [fen]);
+
+  onMoveRef.current = onMove;
+  pieceMapRef.current = pieceMap;
 
   // Convert board coordinates to square position
   const getSquareFromCoords = (x, y) => {
@@ -47,6 +80,52 @@ export default function ChessboardWithArrows({
     return { x, y };
   };
 
+  const buildUciMove = (from, to) => {
+    const piece = pieceMapRef.current[from];
+    const toRank = to?.[1];
+    const isPawn = piece?.toLowerCase() === "p";
+    const isPromotion = isPawn && (toRank === "1" || toRank === "8");
+
+    return `${from}${to}${isPromotion ? "q" : ""}`;
+  };
+
+  const emitMove = (from, to) => {
+    if (!from || !to || from === to || !onMoveRef.current) {
+      return;
+    }
+
+    onMoveRef.current(buildUciMove(from, to));
+  };
+
+  const setSelected = (square) => {
+    selectedSquareRef.current = square;
+    setSelectedSquare(square);
+  };
+
+  const handleSquareTap = (square) => {
+    if (!square) {
+      setSelected(null);
+      return;
+    }
+
+    const selected = selectedSquareRef.current;
+
+    if (!selected) {
+      if (pieceMapRef.current[square]) {
+        setSelected(square);
+      }
+      return;
+    }
+
+    if (selected === square) {
+      setSelected(null);
+      return;
+    }
+
+    emitMove(selected, square);
+    setSelected(null);
+  };
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -57,6 +136,7 @@ export default function ChessboardWithArrows({
         const square = getSquareFromCoords(locationX, locationY);
 
         if (square) {
+          dragStartRef.current = square;
           setDragStart(square);
           setDragCurrent(square);
         }
@@ -74,26 +154,53 @@ export default function ChessboardWithArrows({
       onPanResponderRelease: (evt) => {
         const { locationX, locationY } = evt.nativeEvent;
         const endSquare = getSquareFromCoords(locationX, locationY);
+        const startSquare = dragStartRef.current;
 
-        if (dragStart && endSquare && dragStart !== endSquare) {
-          // Call the onMove callback with the move in UCI format
-          const uciMove = `${dragStart}${endSquare}`;
-          if (onMove) {
-            onMove(uciMove);
-          }
+        if (startSquare && endSquare && startSquare !== endSquare) {
+          emitMove(startSquare, endSquare);
+          setSelected(null);
+        } else if (startSquare && endSquare) {
+          handleSquareTap(endSquare);
         }
 
-        // Clear drag state
+        dragStartRef.current = null;
         setDragStart(null);
         setDragCurrent(null);
       },
 
       onPanResponderTerminate: () => {
+        dragStartRef.current = null;
         setDragStart(null);
         setDragCurrent(null);
       },
     })
   ).current;
+
+  const renderSquareHighlight = (square) => {
+    if (!square) {
+      return null;
+    }
+
+    const coords = getCoordsFromSquare(square);
+    if (!coords) {
+      return null;
+    }
+
+    return (
+      <View
+        pointerEvents="none"
+        style={[
+          styles.squareHighlight,
+          {
+            width: squareSize,
+            height: squareSize,
+            left: coords.x - squareSize / 2,
+            top: coords.y - squareSize / 2,
+          },
+        ]}
+      />
+    );
+  };
 
   const renderArrow = ({ from, to, color = "rgba(255, 193, 7, 0.7)", id = "arrow" }) => {
     if (!from || !to || from === to) {
@@ -170,6 +277,7 @@ export default function ChessboardWithArrows({
           {...props}
         />
       </View>
+      {renderSquareHighlight(selectedSquare)}
       {arrows.map((arrow, index) =>
         renderArrow({
           ...arrow,
@@ -189,5 +297,11 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     left: 0,
+  },
+  squareHighlight: {
+    backgroundColor: "rgba(212, 175, 55, 0.34)",
+    borderColor: "rgba(212, 175, 55, 0.95)",
+    borderWidth: 3,
+    position: "absolute",
   },
 });

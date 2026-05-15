@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from "react-native";
-import Chessboard from "react-native-chessboard";
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
 import { api } from "../api/client";
+import ChessboardWithArrows from "../components/ChessboardWithArrows";
 import {
   AppShell,
   EmptyState,
@@ -10,7 +10,6 @@ import {
   SectionHeader,
   StatPill,
   palette,
-  uiStyles,
 } from "../components/PremiumUI";
 
 export default function PuzzlesScreen({ showBack = true }) {
@@ -34,15 +33,11 @@ export default function PuzzlesScreen({ showBack = true }) {
     loadPuzzles();
   }, []);
 
-  const updateMove = (puzzleId, value) => {
-    setMoves((current) => ({ ...current, [puzzleId]: value }));
-  };
-
-  const submitAttempt = async (puzzle) => {
-    const userMove = moves[puzzle.id]?.trim();
+  const submitAttempt = async (puzzle, detectedMove = null) => {
+    const userMove = detectedMove || moves[puzzle.id]?.trim();
 
     if (!userMove) {
-      Alert.alert("Missing move", "Enter your move in UCI format, like e2e4.");
+      Alert.alert("Missing move", "Tap a piece, then tap its destination square.");
       return;
     }
 
@@ -52,6 +47,8 @@ export default function PuzzlesScreen({ showBack = true }) {
         user_move: userMove,
         time_taken_seconds: null,
       });
+
+      setMoves((current) => ({ ...current, [puzzle.id]: userMove }));
 
       Alert.alert(
         response.data.is_correct ? "Correct" : "Incorrect",
@@ -101,25 +98,22 @@ export default function PuzzlesScreen({ showBack = true }) {
               </View>
 
               <View style={styles.boardWrap}>
-                <Chessboard
+                <ChessboardWithArrows
                   fen={puzzle.fen}
                   boardSize={300}
-                  gestureEnabled={false}
                   withLetters={true}
                   withNumbers={true}
+                  onMove={(move) => submitAttempt(puzzle, move)}
                 />
               </View>
 
               <Text style={styles.fenText} selectable>{puzzle.fen}</Text>
 
-              <TextInput
-                style={uiStyles.input}
-                placeholder="Best move, e.g. e2e4"
-                placeholderTextColor={palette.muted}
-                autoCapitalize="none"
-                value={moves[puzzle.id] || ""}
-                onChangeText={(value) => updateMove(puzzle.id, value)}
-              />
+              <Text style={styles.moveHint}>
+                {moves[puzzle.id]
+                  ? `Last move: ${moves[puzzle.id]}`
+                  : "Tap a piece, then tap the destination square."}
+              </Text>
 
               <PrimaryButton
                 title={submitting === puzzle.id ? "Submitting..." : "Submit move"}
@@ -183,5 +177,11 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 12,
     lineHeight: 18,
+  },
+  moveHint: {
+    color: palette.mutedDark,
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "center",
   },
 });

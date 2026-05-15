@@ -6,12 +6,11 @@ import {
   Alert,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
-import Chessboard from "react-native-chessboard";
 import { api } from "../api/client";
+import ChessboardWithArrows from "../components/ChessboardWithArrows";
 import {
   AppShell,
   EmptyState,
@@ -20,7 +19,6 @@ import {
   SecondaryButton,
   StatPill,
   palette,
-  uiStyles,
 } from "../components/PremiumUI";
 import { AuthContext } from "../context/AuthContext";
 
@@ -89,9 +87,11 @@ export default function MistakeReplayScreen() {
     }
   };
 
-  const submitAttempt = async () => {
-    if (!userMove.trim()) {
-      Alert.alert("Missing move", "Enter your move in UCI format, e.g. e2e4.");
+  const submitAttempt = async (detectedMove = null) => {
+    const moveToSubmit = detectedMove || userMove.trim();
+
+    if (!moveToSubmit) {
+      Alert.alert("Missing move", "Tap a piece, then tap its destination square.");
       return;
     }
 
@@ -99,10 +99,12 @@ export default function MistakeReplayScreen() {
       const response = await api.post(
         `/mistake-replay/${position.move_analysis_id}/attempt`,
         {
-          user_move: userMove.trim(),
+          user_move: moveToSubmit,
           time_taken_seconds: null,
         }
       );
+
+      setUserMove(moveToSubmit);
 
       if (response.data.is_correct) {
         Alert.alert("Correct", "Great job! You found the best move.");
@@ -179,7 +181,7 @@ export default function MistakeReplayScreen() {
       showBack
       eyebrow="Mistake Replay"
       title="Find the move you missed."
-      subtitle="Rebuild the thought process, use progressive hints, then submit the best move in UCI format."
+      subtitle="Rebuild the thought process, use progressive hints, then play the best move on the board."
     >
       <View style={styles.statsRow}>
         <StatPill icon="counter" value={`#${position.move_number}`} label="move" tone="gold" />
@@ -197,12 +199,12 @@ export default function MistakeReplayScreen() {
         </View>
 
         <View style={styles.boardWrap}>
-          <Chessboard
+          <ChessboardWithArrows
             fen={position.fen_before}
             boardSize={boardSize}
-            gestureEnabled={false}
             withLetters={true}
             withNumbers={true}
+            onMove={submitAttempt}
           />
         </View>
 
@@ -221,14 +223,11 @@ export default function MistakeReplayScreen() {
 
       <PremiumPanel style={styles.answerPanel}>
         <Text style={styles.panelLabel}>Best move attempt</Text>
-        <TextInput
-          style={uiStyles.input}
-          placeholder="Enter best move, e.g. e2e4"
-          placeholderTextColor={palette.muted}
-          autoCapitalize="none"
-          value={userMove}
-          onChangeText={setUserMove}
-        />
+        <Text style={styles.movePrompt}>
+          {userMove
+            ? `Last move: ${userMove}`
+            : "Tap a piece, then tap the destination square."}
+        </Text>
 
         {hint ? (
           <View style={styles.hintBox}>
@@ -337,6 +336,13 @@ const styles = StyleSheet.create({
   },
   answerPanel: {
     gap: 12,
+  },
+  movePrompt: {
+    color: palette.mutedDark,
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 20,
+    textAlign: "center",
   },
   hintBox: {
     alignItems: "flex-start",
