@@ -23,6 +23,7 @@ class UserResponse(BaseModel):
     target_rating: Optional[int]
     chesscom_username: Optional[str] = None
     lichess_username: Optional[str] = None
+    is_email_verified: bool = True
 
     class Config:
         from_attributes = True
@@ -36,3 +37,11 @@ class TokenResponse(BaseModel):
 class ConnectedProfilesUpdate(BaseModel):
     chesscom_username: Optional[str] = Field(default=None, max_length=80)
     lichess_username: Optional[str] = Field(default=None, max_length=80)
+
+
+class EmailVerificationResend(BaseModel):
+    email: EmailStr
+
+
+class MessageResponse(BaseModel):
+    detail: str

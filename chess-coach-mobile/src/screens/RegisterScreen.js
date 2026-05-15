@@ -22,7 +22,7 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     try {
-      await register({
+      const response = await register({
         email,
         username,
         password,
@@ -30,7 +30,12 @@ export default function RegisterScreen() {
         target_rating: targetRating ? Number(targetRating) : null,
       });
 
-      Alert.alert("Account created", "You can now log in.");
+      Alert.alert(
+        "Account created",
+        response.data?.is_email_verified
+          ? "You can now log in."
+          : "Check your email to confirm your account before logging in."
+      );
       router.replace("/auth/login");
     } catch (error) {
       Alert.alert(

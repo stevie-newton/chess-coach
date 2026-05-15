@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Boolean, Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -16,5 +16,8 @@ class User(Base):
     target_rating = Column(Integer, nullable=True)
     chesscom_username = Column(String, nullable=True)
     lichess_username = Column(String, nullable=True)
+    is_email_verified = Column(Boolean, nullable=False, default=True)
+    email_verification_token_hash = Column(String, nullable=True)
+    email_verification_expires_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

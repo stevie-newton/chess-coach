@@ -12,6 +12,17 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-5-mini"
     BACKEND_CORS_ORIGINS: str = ""
+    PUBLIC_BACKEND_URL: str = ""
+
+    EMAIL_VERIFICATION_ENABLED: bool = False
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "Chess Coach"
+    SMTP_STARTTLS: bool = True
 
     @property
     def cors_origins(self) -> list[str]:
