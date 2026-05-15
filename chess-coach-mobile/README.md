@@ -10,7 +10,19 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Configure the backend URL
+
+   ```bash
+   cp .env.example .env.local
+   ```
+
+   Set `EXPO_PUBLIC_API_BASE_URL` in `.env.local` to the Railway public URL for the backend, for example:
+
+   ```bash
+   EXPO_PUBLIC_API_BASE_URL=https://your-railway-backend.up.railway.app
+   ```
+
+3. Start the app
 
    ```bash
    npx expo start

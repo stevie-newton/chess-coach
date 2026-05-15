@@ -30,6 +30,8 @@ class OpeningLine(Base):
     fen = Column(Text, nullable=False)
     best_move = Column(String, nullable=False)
     explanation = Column(Text, nullable=True)
+    variation_name = Column(String, nullable=True)
+    difficulty = Column(String, default="medium")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

@@ -12,7 +12,8 @@ from app.schemas.opening import (
     OpeningLineCreate,
     OpeningLineResponse,
     OpeningPracticeAttemptCreate,
-    OpeningPracticeAttemptResponse
+    OpeningPracticeAttemptResponse,
+    OpeningProgressResponse
 )
 
 
@@ -107,7 +108,9 @@ def add_opening_line(
         move_order=payload.move_order,
         fen=payload.fen,
         best_move=payload.best_move,
-        explanation=payload.explanation
+        explanation=payload.explanation,
+        variation_name=payload.variation_name,
+        difficulty=payload.difficulty.lower()
     )
 
     db.add(line)
@@ -144,6 +147,108 @@ def get_opening_lines(
         .order_by(OpeningLine.move_order.asc())
         .all()
     )
+
+
+@router.get("/{opening_id}/progress", response_model=OpeningProgressResponse)
+def get_opening_progress(
+    opening_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    opening = (
+        db.query(Opening)
+        .filter(
+            Opening.id == opening_id,
+            Opening.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not opening:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Opening not found"
+        )
+
+    lines = (
+        db.query(OpeningLine)
+        .filter(OpeningLine.opening_id == opening.id)
+        .order_by(OpeningLine.move_order.asc())
+        .all()
+    )
+
+    total_lines = len(lines)
+    mastered_lines = 0
+    attempted_lines = 0
+    total_attempts = 0
+    correct_attempts = 0
+    weak_lines = []
+
+    for line in lines:
+        attempts = (
+            db.query(OpeningPracticeAttempt)
+            .filter(
+                OpeningPracticeAttempt.user_id == current_user.id,
+                OpeningPracticeAttempt.opening_line_id == line.id
+            )
+            .order_by(OpeningPracticeAttempt.created_at.desc())
+            .all()
+        )
+
+        if not attempts:
+            continue
+
+        attempted_lines += 1
+        line_attempts = len(attempts)
+        line_misses = len([attempt for attempt in attempts if not attempt.is_correct])
+        total_attempts += line_attempts
+        correct_attempts += len([attempt for attempt in attempts if attempt.is_correct])
+
+        latest_attempt = attempts[0]
+        if latest_attempt.is_correct:
+            mastered_lines += 1
+        else:
+            weak_lines.append({
+                "opening_line_id": line.id,
+                "move_order": line.move_order,
+                "variation_name": line.variation_name,
+                "best_move": line.best_move,
+                "difficulty": line.difficulty,
+                "attempts": line_attempts,
+                "misses": line_misses,
+                "last_user_move": latest_attempt.user_move,
+            })
+
+    known_percent = (
+        0
+        if total_lines == 0
+        else round((mastered_lines / total_lines) * 100, 2)
+    )
+    weak_lines = sorted(
+        weak_lines,
+        key=lambda item: (item["misses"], item["move_order"]),
+        reverse=True
+    )
+    focus = None
+
+    if weak_lines:
+        weakest = weak_lines[0]
+        variation = weakest["variation_name"] or "line"
+        focus = f"You keep missing move {weakest['move_order']} in the {variation}."
+
+    return {
+        "opening_id": opening.id,
+        "opening_name": opening.name,
+        "known_percent": known_percent,
+        "total_lines": total_lines,
+        "mastered_lines": mastered_lines,
+        "attempted_lines": attempted_lines,
+        "total_attempts": total_attempts,
+        "correct_attempts": correct_attempts,
+        "weak_lines": weak_lines,
+        "summary": f"You know {known_percent}% of this opening.",
+        "focus": focus,
+    }
 
 
 @router.get("/{opening_id}/practice/next", response_model=OpeningLineResponse)

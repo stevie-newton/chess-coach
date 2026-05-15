@@ -3,7 +3,12 @@ import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { router } from "expo-router";
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+const LOCAL_API_BASE_URL = Platform.select({
+  android: "http://10.0.2.2:8000",
+  default: "http://127.0.0.1:8000",
+});
+
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || LOCAL_API_BASE_URL;
 const SESSION_EXPIRED_EVENT = "chess-coach:session-expired";
 const sessionExpiredListeners = new Set();
 

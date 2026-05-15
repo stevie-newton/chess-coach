@@ -19,7 +19,7 @@ const trainingLinks = [
   ["Training", "Replay mistakes and keep your daily work moving.", "target", "/(tabs)/training", palette.teal],
   ["Coach", "Ask OpenAI for summaries, mistake explanations, and plans.", "account-tie-voice", "/(tabs)/coach", palette.gold],
   ["Puzzles", "Work through tactics shaped around your progress.", "puzzle", "/(tabs)/puzzles", palette.wine],
-  ["Openings", "Practice lines and build a cleaner repertoire.", "book-open-page-variant", "/openings", palette.gold],
+  ["Opening Board", "Prepare tournaments, drill memory, and build your repertoire.", "book-open-page-variant", "/openings", palette.gold],
 ];
 
 const clampPercent = (value) => Math.max(0, Math.min(100, Number(value) || 0));

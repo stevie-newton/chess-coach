@@ -28,6 +28,12 @@ class PuzzleAttemptResponse(BaseModel):
     user_move: str
     is_correct: bool
     time_taken_seconds: Optional[int]
+    message: str
+    feedback: str
+    explanation: Optional[str] = None
+    puzzle_rating: int
+    puzzle_streak: int
+    spaced_repetition: Optional[dict] = None
     created_at: datetime
 
     class Config:

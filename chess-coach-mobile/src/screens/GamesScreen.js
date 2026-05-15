@@ -128,6 +128,7 @@ export default function GamesScreen({ showBack = true }) {
           <Text style={styles.importText}>Sync an account or paste a PGN to populate your review queue.</Text>
         </View>
         <View style={styles.importActions}>
+          <PrimaryButton title="New training game" icon="chess-board" tone="light" onPress={() => router.push("/game-session")} />
           <PrimaryButton title="Import" icon="download" tone="light" onPress={() => router.push("/import-games")} />
           <SecondaryButton title="Refresh" icon="refresh" onPress={refreshGames} />
         </View>

@@ -27,6 +27,8 @@ class OpeningLineCreate(BaseModel):
     fen: str
     best_move: str
     explanation: Optional[str] = None
+    variation_name: Optional[str] = None
+    difficulty: str = "medium"
 
 
 class OpeningLineResponse(BaseModel):
@@ -36,6 +38,8 @@ class OpeningLineResponse(BaseModel):
     fen: str
     best_move: str
     explanation: Optional[str]
+    variation_name: Optional[str]
+    difficulty: str
     created_at: datetime
 
     class Config:
@@ -58,3 +62,28 @@ class OpeningPracticeAttemptResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class OpeningProgressWeakLine(BaseModel):
+    opening_line_id: int
+    move_order: int
+    variation_name: Optional[str]
+    best_move: str
+    difficulty: str
+    attempts: int
+    misses: int
+    last_user_move: Optional[str] = None
+
+
+class OpeningProgressResponse(BaseModel):
+    opening_id: int
+    opening_name: str
+    known_percent: float
+    total_lines: int
+    mastered_lines: int
+    attempted_lines: int
+    total_attempts: int
+    correct_attempts: int
+    weak_lines: list[OpeningProgressWeakLine]
+    summary: str
+    focus: Optional[str] = None

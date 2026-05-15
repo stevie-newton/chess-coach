@@ -14,6 +14,7 @@ export default function ChessboardWithArrows({
   withNumbers = true,
   onMove = null,
   arrows = [],
+  highlights = [],
   ...props
 }) {
   const [selectedSquare, setSelectedSquare] = useState(null);
@@ -176,7 +177,12 @@ export default function ChessboardWithArrows({
     })
   ).current;
 
-  const renderSquareHighlight = (square) => {
+  const renderSquareHighlight = (
+    square,
+    color = "rgba(212, 175, 55, 0.34)",
+    borderColor = "rgba(212, 175, 55, 0.95)",
+    key = null
+  ) => {
     if (!square) {
       return null;
     }
@@ -188,10 +194,13 @@ export default function ChessboardWithArrows({
 
     return (
       <View
+        key={key}
         pointerEvents="none"
         style={[
           styles.squareHighlight,
           {
+            backgroundColor: color,
+            borderColor,
             width: squareSize,
             height: squareSize,
             left: coords.x - squareSize / 2,
@@ -278,6 +287,14 @@ export default function ChessboardWithArrows({
         />
       </View>
       {renderSquareHighlight(selectedSquare)}
+      {highlights.map((highlight, index) =>
+        renderSquareHighlight(
+          highlight.square,
+          highlight.color,
+          highlight.borderColor,
+          highlight.id || `highlight-${index}`
+        )
+      )}
       {arrows.map((arrow, index) =>
         renderArrow({
           ...arrow,

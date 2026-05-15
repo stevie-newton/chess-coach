@@ -14,6 +14,8 @@ class User(Base):
 
     chess_level = Column(String, nullable=True)
     target_rating = Column(Integer, nullable=True)
+    puzzle_rating = Column(Integer, nullable=False, default=1200)
+    puzzle_streak = Column(Integer, nullable=False, default=0)
     chesscom_username = Column(String, nullable=True)
     lichess_username = Column(String, nullable=True)
     is_email_verified = Column(Boolean, nullable=False, default=True)

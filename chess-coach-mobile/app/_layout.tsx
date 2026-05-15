@@ -10,6 +10,7 @@ export default function RootLayout() {
         <Stack.Screen name="auth/login" options={{ title: "Login" }} />
         <Stack.Screen name="auth/register" options={{ title: "Register" }} />
         <Stack.Screen name="import-games" options={{ title: "Import Games" }} />
+        <Stack.Screen name="game-session" options={{ title: "Game Session" }} />
         <Stack.Screen name="game-detail" options={{ title: "Game Detail" }} />
         <Stack.Screen name="daily-training" options={{ title: "Daily Training" }} />
         <Stack.Screen name="mistake-replay" options={{ title: "Mistake Replay" }} />
