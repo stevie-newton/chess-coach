@@ -8,7 +8,10 @@ from app.models.game import Game
 from app.models.puzzle import PuzzleAttempt
 from app.models.training import TrainingSession
 from app.models.tournament import TournamentSimulation
+from app.models.user import User
 from app.models.weakness import Weakness
+from app.services.coaching_voice_service import coach_voice
+from app.services.skill_profile_service import detect_skill_profile
 
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
@@ -37,14 +40,18 @@ def _extract_output_text(response_json: dict) -> str:
     return "\n".join(chunks).strip()
 
 
-def call_openai_coach(feature: str, prompt: str, context: str) -> str:
+def call_openai_coach(feature: str, prompt: str, context: str, coach_personality: str | None = None) -> str:
     api_key = _require_openai_key()
+    voice = coach_voice(coach_personality)
 
     instructions = (
         "You are Chess Coach, a practical chess trainer for club players. "
+        f"Personality: {voice['label']}. {voice['instruction']} "
         "Use only the provided app data as factual context. "
         "Explain chess ideas in simple words, avoid engine jargon unless useful, "
-        "and give concrete next steps. If data is missing, say what analysis is needed next."
+        "and give concrete next steps. Adapt puzzle difficulty, lesson complexity, "
+        "engine-depth assumptions, and coaching language to the detected skill profile. "
+        "If data is missing, say what analysis is needed next."
     )
 
     try:
@@ -94,6 +101,8 @@ def call_openai_coach(feature: str, prompt: str, context: str) -> str:
 
 
 def user_summary_context(db: Session, user_id: int) -> str:
+    user = db.query(User).filter(User.id == user_id).first()
+    skill_profile = detect_skill_profile(db=db, user=user) if user else None
     analyzed_games = (
         db.query(GameAnalysis)
         .join(Game, Game.id == GameAnalysis.game_id)
@@ -132,8 +141,7 @@ def user_summary_context(db: Session, user_id: int) -> str:
         for game in tournament_games
     ] or ["- No tournament simulations yet"]
 
-    return "\n".join(
-        [
+    context_lines = [
             f"Analyzed games: {analyzed_games}",
             f"Training sessions: {training_completed}/{training_total} completed",
             f"Puzzle attempts: {puzzle_attempts}",
@@ -141,8 +149,24 @@ def user_summary_context(db: Session, user_id: int) -> str:
             *weakness_lines,
             "Recent tournament simulations:",
             *tournament_lines,
-        ]
-    )
+    ]
+
+    if skill_profile:
+        context_lines.extend(
+            [
+                f"Coach personality: {coach_voice(user.coach_personality)['label']}",
+                "Skill profile:",
+                f"- Declared level: {skill_profile['declared_level'] or 'not set'}",
+                f"- Detected level: {skill_profile['detected_level']}",
+                f"- Confidence: {skill_profile['confidence']}",
+                f"- Puzzle difficulty: {skill_profile['adaptation']['puzzle_difficulty']}",
+                f"- Lesson complexity: {skill_profile['adaptation']['lesson_complexity']}",
+                f"- Engine depth: {skill_profile['adaptation']['engine_depth']}",
+                f"- Coaching language: {skill_profile['adaptation']['coaching_language']}",
+            ]
+        )
+
+    return "\n".join(context_lines)
 
 
 def game_context(db: Session, user_id: int, game_id: int) -> str:

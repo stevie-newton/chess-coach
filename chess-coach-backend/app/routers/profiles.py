@@ -5,7 +5,8 @@ from app.core.auth_dependency import get_current_user
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.import_games import ImportGamesRequest
-from app.schemas.user import ConnectedProfilesUpdate, UserResponse
+from app.schemas.user import CoachSettingsUpdate, ConnectedProfilesUpdate, UserResponse
+from app.services.coaching_voice_service import normalize_coach_personality
 from app.services.import_service import import_chesscom_games, import_lichess_games
 
 
@@ -35,6 +36,21 @@ def update_connected_profiles(
 ):
     current_user.chesscom_username = clean_username(payload.chesscom_username)
     current_user.lichess_username = clean_username(payload.lichess_username)
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
+
+
+@router.put("/coach-settings", response_model=UserResponse)
+def update_coach_settings(
+    payload: CoachSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.coach_personality = normalize_coach_personality(payload.coach_personality)
 
     db.add(current_user)
     db.commit()

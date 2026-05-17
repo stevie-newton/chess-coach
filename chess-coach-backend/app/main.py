@@ -5,8 +5,8 @@ from app.core.config import settings
 from app.core.database import Base, engine
 from app.models import user, game, analysis, weakness, training, puzzle, opening, tournament, mistake_replay
 from app.routers import (
-    auth, games, analysis as analysis_router, openings, puzzles, weaknesses, training as training_router, openings, 
-    tournaments, dashboard, coach, study_schedule as study_schedule_router, import_games, board, mistake_replay as mistake_replay_router, daily_training, profiles
+    auth, games, analysis as analysis_router, openings, puzzles, weaknesses, training as training_router, openings,
+    tournaments, dashboard, coach, study_schedule as study_schedule_router, import_games, board, mistake_replay as mistake_replay_router, daily_training, profiles, endgames, calculation
     )
 
 from app.models import study_schedule
@@ -50,6 +50,8 @@ app.include_router(study_schedule_router.router)
 app.include_router(import_games.router)
 app.include_router(daily_training.router)
 app.include_router(profiles.router)
+app.include_router(endgames.router)
+app.include_router(calculation.router)
 @app.get("/")
 def root():
     return {

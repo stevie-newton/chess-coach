@@ -57,11 +57,23 @@ class OpeningPracticeAttemptResponse(BaseModel):
     opening_line_id: int
     user_move: str
     is_correct: bool
+    is_legal: bool = True
+    expected_move: Optional[str] = None
+    message: str = "Saved"
+    feedback: str = "Opening practice attempt saved."
+    theory_response: Optional[dict] = None
+    next_line: Optional[dict] = None
     time_taken_seconds: Optional[int]
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class OpeningPracticeSessionResponse(BaseModel):
+    opening: OpeningResponse
+    lines: list[OpeningLineResponse]
+    progress: OpeningProgressResponse
 
 
 class OpeningProgressWeakLine(BaseModel):

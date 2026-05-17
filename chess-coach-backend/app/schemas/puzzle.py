@@ -30,6 +30,9 @@ class PuzzleAttemptResponse(BaseModel):
     time_taken_seconds: Optional[int]
     message: str
     feedback: str
+    is_legal: bool = True
+    best_move: Optional[str] = None
+    explanation_source: Optional[str] = None
     explanation: Optional[str] = None
     puzzle_rating: int
     puzzle_streak: int

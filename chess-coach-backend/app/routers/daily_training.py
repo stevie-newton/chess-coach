@@ -10,6 +10,14 @@ from app.models.study_schedule import StudySchedule
 from app.models.mistake_replay import MistakeReviewState
 from app.models.puzzle import PuzzleAttempt
 from app.models.weakness import Weakness
+from app.services.daily_training_service import (
+    build_training_completion_summary,
+    detect_daily_training_patterns,
+    generate_daily_training_session,
+)
+from app.services.progression_service import complete_daily_progression
+from app.services.post_training_report_service import build_post_training_report
+from app.services.skill_profile_service import detect_skill_profile
 
 
 router = APIRouter(
@@ -25,6 +33,7 @@ def get_today_training_dashboard(
 ):
     today_name = datetime.now().strftime("%A")
     now = datetime.now(timezone.utc)
+    skill_profile = detect_skill_profile(db=db, user=current_user)
 
     today_schedule = (
         db.query(StudySchedule)
@@ -35,6 +44,17 @@ def get_today_training_dashboard(
         .order_by(StudySchedule.created_at.desc())
         .first()
     )
+
+    generated_today = False
+    detected_patterns = detect_daily_training_patterns(db=db, user_id=current_user.id)
+
+    if not today_schedule:
+        today_schedule, detected_patterns = generate_daily_training_session(
+            db=db,
+            user_id=current_user.id,
+            skill_profile=skill_profile,
+        )
+        generated_today = True
 
     due_mistakes = (
         db.query(MistakeReviewState)
@@ -79,7 +99,8 @@ def get_today_training_dashboard(
             "focus_area": today_schedule.focus_area,
             "activity": today_schedule.activity,
             "duration_minutes": today_schedule.duration_minutes,
-            "completed": today_schedule.completed
+            "completed": today_schedule.completed,
+            "generated_today": generated_today,
         },
         "mistake_replay": {
             "due_now": due_mistakes,
@@ -95,12 +116,78 @@ def get_today_training_dashboard(
             "frequency": top_weakness.frequency,
             "severity": top_weakness.severity
         },
+        "skill_profile": skill_profile,
+        "detected_patterns": [
+            {
+                "key": pattern["key"],
+                "label": pattern["label"],
+                "description": pattern["description"],
+                "score": pattern["score"],
+            }
+            for pattern in detected_patterns
+        ],
         "recommended_actions": build_recommended_actions(
             today_schedule=today_schedule,
             due_mistakes=due_mistakes,
             puzzle_success_rate=puzzle_success_rate,
-            top_weakness=top_weakness
+            top_weakness=top_weakness,
+            skill_profile=skill_profile,
+            detected_patterns=detected_patterns,
         )
+    }
+
+
+@router.post("/complete")
+def complete_today_training(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    today_name = datetime.now().strftime("%A")
+    today_schedule = (
+        db.query(StudySchedule)
+        .filter(
+            StudySchedule.user_id == current_user.id,
+            StudySchedule.day == today_name
+        )
+        .order_by(StudySchedule.created_at.desc())
+        .first()
+    )
+
+    if not today_schedule:
+        skill_profile = detect_skill_profile(db=db, user=current_user)
+        today_schedule, _ = generate_daily_training_session(
+            db=db,
+            user_id=current_user.id,
+            skill_profile=skill_profile,
+        )
+
+    today_schedule.completed = True
+    db.add(today_schedule)
+    db.commit()
+    db.refresh(today_schedule)
+
+    completion_report = build_training_completion_summary(db=db, user_id=current_user.id)
+    progression = complete_daily_progression(
+        db=db,
+        user=current_user,
+        accuracy=completion_report["accuracy"],
+    )
+    post_training_report = build_post_training_report(
+        completion_report=completion_report,
+        user=current_user,
+    )
+
+    return {
+        "study_schedule": {
+            "id": today_schedule.id,
+            "focus_area": today_schedule.focus_area,
+            "activity": today_schedule.activity,
+            "duration_minutes": today_schedule.duration_minutes,
+            "completed": today_schedule.completed,
+        },
+        "completion_report": completion_report,
+        "post_training_report": post_training_report,
+        "progression": progression,
     }
 
 
@@ -108,9 +195,12 @@ def build_recommended_actions(
     today_schedule,
     due_mistakes: int,
     puzzle_success_rate: float,
-    top_weakness
+    top_weakness,
+    skill_profile: dict | None = None,
+    detected_patterns: list[dict] | None = None,
 ):
     actions = []
+    detected_patterns = detected_patterns or []
 
     if today_schedule and not today_schedule.completed:
         actions.append(
@@ -130,6 +220,20 @@ def build_recommended_actions(
     if top_weakness:
         actions.append(
             f"Focus on your biggest weakness: {top_weakness.category}."
+        )
+
+    if detected_patterns:
+        top_pattern = detected_patterns[0]
+        actions.append(
+            f"AI adaptation: today's session targets {top_pattern['label'].lower()} from recent game patterns."
+        )
+
+    if skill_profile:
+        actions.append(
+            (
+                f"Session difficulty is tuned for {skill_profile['detected_level'].lower()} level: "
+                f"{skill_profile['adaptation']['puzzle_difficulty']}."
+            )
         )
 
     return actions

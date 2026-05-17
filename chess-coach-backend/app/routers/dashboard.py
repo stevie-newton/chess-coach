@@ -11,6 +11,8 @@ from app.models.weakness import Weakness
 from app.models.training import TrainingSession
 from app.models.puzzle import PuzzleAttempt
 from app.models.tournament import TournamentSimulation
+from app.services.progression_service import build_progression_profile
+from app.services.skill_profile_service import detect_skill_profile
 
 
 router = APIRouter(
@@ -138,8 +140,14 @@ def get_dashboard_summary(
             "chess_level": current_user.chess_level,
             "target_rating": current_user.target_rating,
             "chesscom_username": current_user.chesscom_username,
-            "lichess_username": current_user.lichess_username
+            "lichess_username": current_user.lichess_username,
+            "coach_personality": current_user.coach_personality,
+            "xp_points": current_user.xp_points,
+            "training_level": current_user.training_level,
+            "training_streak": current_user.training_streak,
         },
+        "progression": build_progression_profile(db=db, user=current_user),
+        "skill_profile": detect_skill_profile(db=db, user=current_user),
         "games": {
             "total": total_games,
             "analyzed": analyzed_games,
@@ -212,6 +220,14 @@ def get_progress_report(
             f"- Simulations: {summary['tournaments']['simulations']}",
             f"- Wins: {summary['tournaments']['wins']}",
             f"- Win rate: {summary['tournaments']['win_rate']}%",
+            "",
+            "Skill Detection",
+            f"- Detected level: {summary['skill_profile']['detected_level']}",
+            f"- Confidence: {summary['skill_profile']['confidence']}",
+            f"- Puzzle difficulty: {summary['skill_profile']['adaptation']['puzzle_difficulty']}",
+            f"- Lesson complexity: {summary['skill_profile']['adaptation']['lesson_complexity']}",
+            f"- Engine depth: {summary['skill_profile']['adaptation']['engine_depth']}",
+            f"- Coaching language: {summary['skill_profile']['adaptation']['coaching_language']}",
         ]
     )
 

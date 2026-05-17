@@ -56,7 +56,8 @@ export default function PuzzlesScreen({ showBack = true }) {
     const moveSquares = moveToSquares(submittedMove);
     const solutionSquares = moveToSquares(puzzle.solution);
     const isSolved = feedback?.is_correct;
-    const isIncorrect = feedback && !feedback.is_correct && feedback.user_move;
+    const isIllegal = feedback && feedback.is_legal === false;
+    const isIncorrect = feedback && !feedback.is_correct && feedback.user_move && !isIllegal;
     const shouldRevealSolution = failedAttemptsByPuzzle[puzzle.id] >= SOLUTION_REVEAL_FAILS;
     const arrows = [];
     const highlights = [];
@@ -67,6 +68,8 @@ export default function PuzzlesScreen({ showBack = true }) {
         id: `puzzle-${puzzle.id}-${isSolved ? "correct" : isIncorrect ? "mistake" : "pending"}`,
         color: isSolved
           ? "rgba(30, 142, 84, 0.82)"
+          : isIllegal
+            ? "rgba(201, 90, 106, 0.5)"
           : isIncorrect
             ? "rgba(201, 90, 106, 0.78)"
             : "rgba(215, 179, 90, 0.72)",
@@ -77,11 +80,15 @@ export default function PuzzlesScreen({ showBack = true }) {
           square: moveSquares.from,
           color: isSolved
             ? "rgba(30, 142, 84, 0.26)"
+            : isIllegal
+              ? "rgba(201, 90, 106, 0.16)"
             : isIncorrect
               ? "rgba(201, 90, 106, 0.24)"
               : "rgba(215, 179, 90, 0.22)",
           borderColor: isSolved
             ? "rgba(30, 142, 84, 0.86)"
+            : isIllegal
+              ? "rgba(201, 90, 106, 0.62)"
             : isIncorrect
               ? "rgba(201, 90, 106, 0.84)"
               : "rgba(215, 179, 90, 0.78)",
@@ -90,11 +97,15 @@ export default function PuzzlesScreen({ showBack = true }) {
           square: moveSquares.to,
           color: isSolved
             ? "rgba(30, 142, 84, 0.32)"
+            : isIllegal
+              ? "rgba(201, 90, 106, 0.18)"
             : isIncorrect
               ? "rgba(201, 90, 106, 0.3)"
               : "rgba(215, 179, 90, 0.28)",
           borderColor: isSolved
             ? "rgba(30, 142, 84, 0.95)"
+            : isIllegal
+              ? "rgba(201, 90, 106, 0.66)"
             : isIncorrect
               ? "rgba(201, 90, 106, 0.92)"
               : "rgba(215, 179, 90, 0.88)",
@@ -268,10 +279,27 @@ export default function PuzzlesScreen({ showBack = true }) {
                       {feedback.message}
                     </Text>
                     <Text style={styles.correctBody}>{feedback.feedback}</Text>
-                    {feedback.is_correct && feedback.explanation ? (
-                      <Text style={styles.explanation}>{feedback.explanation}</Text>
+                    {feedback.explanation ? (
+                      <View style={styles.explanationPanel}>
+                        <View style={styles.explanationTopLine}>
+                          <Text style={styles.explanationLabel}>Why</Text>
+                          {feedback.explanation_source ? (
+                            <Text style={styles.explanationSource}>
+                              {feedback.explanation_source === "openai" ? "AI" : "Coach"}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Text style={styles.explanation}>{feedback.explanation}</Text>
+                      </View>
                     ) : null}
-                    {feedback.is_correct ? (
+                    {!feedback.is_legal ? (
+                      <View style={styles.solutionPanel}>
+                        <Text style={styles.solutionLabel}>Position check</Text>
+                        <Text style={styles.solutionExplanation}>
+                          The move was rejected before engine comparison because it is not legal in this position.
+                        </Text>
+                      </View>
+                    ) : feedback.is_correct ? (
                       <View style={styles.progressRow}>
                         <StatPill icon="chart-line" value={feedback.puzzle_rating} label="rating" tone="sage" />
                         <StatPill icon="fire" value={feedback.puzzle_streak} label="streak" tone="gold" />
@@ -303,8 +331,8 @@ export default function PuzzlesScreen({ showBack = true }) {
                         ) : null}
                         {shouldRevealSolution ? (
                           <View style={styles.solutionPanel}>
-                            <Text style={styles.solutionLabel}>Solution</Text>
-                            <Text style={styles.solutionMove}>{puzzle.solution}</Text>
+                            <Text style={styles.solutionLabel}>Engine best move</Text>
+                            <Text style={styles.solutionMove}>{feedback.best_move || puzzle.solution}</Text>
                             <Text style={styles.solutionExplanation}>
                               {feedback.explanation ||
                                 "This move was the best tactical opportunity found in your game analysis. Replay the position and compare it with your move to see what threat, capture, or forcing sequence it creates."}
@@ -465,6 +493,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 19,
+  },
+  explanationPanel: {
+    backgroundColor: palette.ivory,
+    borderColor: palette.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 7,
+    padding: 11,
+  },
+  explanationTopLine: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  explanationLabel: {
+    color: palette.gold,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  explanationSource: {
+    color: palette.muted,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
   },
   hintText: {
     color: palette.goldSoft,

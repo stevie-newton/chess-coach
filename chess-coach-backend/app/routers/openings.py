@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+import chess
 
 from app.core.database import get_db
 from app.core.auth_dependency import get_current_user
@@ -13,6 +14,7 @@ from app.schemas.opening import (
     OpeningLineResponse,
     OpeningPracticeAttemptCreate,
     OpeningPracticeAttemptResponse,
+    OpeningPracticeSessionResponse,
     OpeningProgressResponse
 )
 
@@ -21,6 +23,95 @@ router = APIRouter(
     prefix="/openings",
     tags=["Openings"]
 )
+
+
+def line_payload(line: OpeningLine | None):
+    if not line:
+        return None
+
+    return {
+        "id": line.id,
+        "opening_id": line.opening_id,
+        "move_order": line.move_order,
+        "fen": line.fen,
+        "best_move": line.best_move,
+        "explanation": line.explanation,
+        "variation_name": line.variation_name,
+        "difficulty": line.difficulty,
+        "created_at": line.created_at,
+    }
+
+
+def parse_opening_move(fen: str, move_text: str):
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        return None, None
+
+    normalized = (move_text or "").strip()
+
+    try:
+        move = chess.Move.from_uci(normalized.lower())
+        if move in board.legal_moves:
+            return board, move
+    except ValueError:
+        pass
+
+    try:
+        return board, board.parse_san(normalized)
+    except ValueError:
+        return board, None
+
+
+def side_to_move(fen: str):
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        return None
+
+    return "white" if board.turn == chess.WHITE else "black"
+
+
+def validate_opening_move(fen: str, user_move: str, expected_move: str):
+    board, parsed_user_move = parse_opening_move(fen, user_move)
+    expected_board, parsed_expected_move = parse_opening_move(fen, expected_move)
+
+    if not board or not expected_board:
+        return {
+            "is_legal": False,
+            "is_correct": False,
+            "normalized_user_move": user_move,
+            "normalized_expected_move": expected_move,
+            "message": "Invalid opening position",
+            "feedback": "This saved opening position has an invalid FEN.",
+        }
+
+    if not parsed_user_move:
+        return {
+            "is_legal": False,
+            "is_correct": False,
+            "normalized_user_move": user_move,
+            "normalized_expected_move": parsed_expected_move.uci() if parsed_expected_move else expected_move,
+            "message": "Illegal move",
+            "feedback": "That move is not legal in this opening position.",
+        }
+
+    is_correct = parsed_expected_move is not None and parsed_user_move == parsed_expected_move
+    expected_san = expected_board.san(parsed_expected_move) if parsed_expected_move else expected_move
+    user_san = board.san(parsed_user_move)
+
+    return {
+        "is_legal": True,
+        "is_correct": is_correct,
+        "normalized_user_move": parsed_user_move.uci(),
+        "normalized_expected_move": parsed_expected_move.uci() if parsed_expected_move else expected_move,
+        "message": "Correct opening move" if is_correct else "Different from repertoire",
+        "feedback": (
+            f"{user_san} matches your repertoire move."
+            if is_correct
+            else f"{user_san} is legal, but this line expects {expected_san}."
+        ),
+    }
 
 
 @router.post("/", response_model=OpeningResponse)
@@ -302,6 +393,51 @@ def get_next_opening_practice_line(
     return lines[0]
 
 
+@router.get("/{opening_id}/practice/session", response_model=OpeningPracticeSessionResponse)
+def get_opening_practice_session(
+    opening_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    opening = (
+        db.query(Opening)
+        .filter(
+            Opening.id == opening_id,
+            Opening.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not opening:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Opening not found"
+        )
+
+    lines = (
+        db.query(OpeningLine)
+        .filter(OpeningLine.opening_id == opening.id)
+        .order_by(OpeningLine.move_order.asc())
+        .all()
+    )
+
+    if not lines:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No opening lines found"
+        )
+
+    return {
+        "opening": opening,
+        "lines": lines,
+        "progress": get_opening_progress(
+            opening_id=opening.id,
+            db=db,
+            current_user=current_user,
+        ),
+    }
+
+
 @router.post(
     "/{opening_id}/lines/{line_id}/attempt",
     response_model=OpeningPracticeAttemptResponse
@@ -343,13 +479,34 @@ def attempt_opening_line(
             detail="Opening line not found"
         )
 
-    is_correct = payload.user_move.strip().lower() == line.best_move.strip().lower()
+    validation = validate_opening_move(
+        fen=line.fen,
+        user_move=payload.user_move,
+        expected_move=line.best_move,
+    )
+    is_correct = validation["is_correct"]
+    next_line = (
+        db.query(OpeningLine)
+        .filter(
+            OpeningLine.opening_id == opening.id,
+            OpeningLine.move_order > line.move_order,
+        )
+        .order_by(OpeningLine.move_order.asc())
+        .first()
+    )
+    theory_response = None
+
+    if is_correct and next_line:
+        user_color = opening.color.lower()
+        next_side = side_to_move(next_line.fen)
+        if next_side and next_side != user_color:
+            theory_response = line_payload(next_line)
 
     attempt = OpeningPracticeAttempt(
         user_id=current_user.id,
         opening_id=opening.id,
         opening_line_id=line.id,
-        user_move=payload.user_move,
+        user_move=validation["normalized_user_move"],
         is_correct=is_correct,
         time_taken_seconds=payload.time_taken_seconds
     )
@@ -358,4 +515,18 @@ def attempt_opening_line(
     db.commit()
     db.refresh(attempt)
 
-    return attempt
+    return {
+        "id": attempt.id,
+        "opening_id": attempt.opening_id,
+        "opening_line_id": attempt.opening_line_id,
+        "user_move": attempt.user_move,
+        "is_correct": attempt.is_correct,
+        "is_legal": validation["is_legal"],
+        "expected_move": validation["normalized_expected_move"],
+        "message": validation["message"],
+        "feedback": validation["feedback"],
+        "theory_response": theory_response,
+        "next_line": line_payload(next_line),
+        "time_taken_seconds": attempt.time_taken_seconds,
+        "created_at": attempt.created_at,
+    }

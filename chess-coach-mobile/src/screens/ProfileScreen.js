@@ -7,9 +7,16 @@ import {
   EmptyState,
   PremiumPanel,
   PrimaryButton,
+  SecondaryButton,
   StatPill,
   palette,
 } from "../components/PremiumUI";
+
+const coachPersonalities = [
+  ["friendly", "Friendly", "heart-outline", "Encouraging feedback with simple next steps."],
+  ["strict", "Strict", "clipboard-check-outline", "Direct correction and disciplined rules."],
+  ["grandmaster", "Grandmaster", "chess-king", "Candidate moves and deeper positional detail."],
+];
 
 export default function ProfileScreen({ showBack = true }) {
   const [summary, setSummary] = useState(null);
@@ -42,6 +49,28 @@ export default function ProfileScreen({ showBack = true }) {
   }
 
   const user = summary?.user;
+  const progression = summary?.progression;
+  const selectedPersonality = user?.coach_personality || "friendly";
+
+  const updateCoachPersonality = async (coachPersonality) => {
+    try {
+      const response = await api.put("/profiles/coach-settings", {
+        coach_personality: coachPersonality,
+      });
+      setSummary((current) => ({
+        ...current,
+        user: {
+          ...current.user,
+          coach_personality: response.data.coach_personality,
+        },
+      }));
+    } catch (error) {
+      Alert.alert(
+        "Coach settings",
+        error.response?.data?.detail || "Could not update coach personality"
+      );
+    }
+  };
 
   const exportProgressReport = async () => {
     try {
@@ -79,10 +108,62 @@ export default function ProfileScreen({ showBack = true }) {
           </PremiumPanel>
 
           <View style={styles.statsRow}>
-            <StatPill icon="chess-pawn" value={summary.games?.total ?? 0} label="games" tone="gold" />
-            <StatPill icon="target" value={summary.training?.completed_sessions ?? 0} label="sessions" />
-            <StatPill icon="puzzle" value={summary.puzzles?.attempts ?? 0} label="puzzles" tone="wine" />
+            <StatPill icon="star-four-points" value={progression?.xp_points ?? 0} label="XP" tone="gold" />
+            <StatPill icon="medal" value={progression?.level ?? 1} label="level" />
+            <StatPill icon="fire" value={progression?.training_streak ?? 0} label="streak" tone="wine" />
           </View>
+
+          {progression ? (
+            <PremiumPanel style={styles.progressionPanel}>
+              <Text style={styles.panelTitle}>Progression</Text>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${progression.level_progress}%` }]} />
+              </View>
+              <Text style={styles.progressText}>
+                {progression.xp_to_next_level} XP to level {progression.level + 1}
+              </Text>
+
+              <View style={styles.badgeGrid}>
+                {progression.achievements.map((achievement) => (
+                  <View
+                    key={achievement.key}
+                    style={achievement.unlocked ? styles.badgeUnlocked : styles.badgeLocked}
+                  >
+                    <Text style={styles.badgeTitle}>
+                      {achievement.unlocked ? "✓ " : ""}
+                      {achievement.title}
+                    </Text>
+                    <Text style={styles.badgeText}>
+                      {achievement.progress}/{achievement.target} | {achievement.description}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </PremiumPanel>
+          ) : null}
+
+          <PremiumPanel style={styles.coachPanel}>
+            <Text style={styles.panelTitle}>Coach personality</Text>
+            <View style={styles.personalityGrid}>
+              {coachPersonalities.map(([key, label, icon, description]) => {
+                const selected = selectedPersonality === key;
+
+                return (
+                  <View key={key} style={styles.personalityItem}>
+                    <SecondaryButton
+                      title={label}
+                      icon={icon}
+                      onPress={() => updateCoachPersonality(key)}
+                      style={selected ? styles.personalitySelected : styles.personalityButton}
+                    />
+                    <Text style={selected ? styles.personalityTextSelected : styles.personalityText}>
+                      {description}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </PremiumPanel>
 
           <PremiumPanel style={styles.connectedPanel}>
             <Text style={styles.panelTitle}>Connected profiles</Text>
@@ -159,6 +240,87 @@ const styles = StyleSheet.create({
   connectedPanel: {
     gap: 12,
     marginBottom: 18,
+  },
+  progressionPanel: {
+    gap: 12,
+    marginBottom: 18,
+  },
+  progressTrack: {
+    backgroundColor: "#252A34",
+    borderColor: palette.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 14,
+    overflow: "hidden",
+  },
+  progressFill: {
+    backgroundColor: palette.gold,
+    borderRadius: 8,
+    height: "100%",
+  },
+  progressText: {
+    color: palette.muted,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  badgeGrid: {
+    gap: 8,
+  },
+  badgeUnlocked: {
+    backgroundColor: "#243A2D",
+    borderColor: palette.sage,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 11,
+  },
+  badgeLocked: {
+    backgroundColor: palette.ivory,
+    borderColor: palette.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    opacity: 0.74,
+    padding: 11,
+  },
+  badgeTitle: {
+    color: palette.ink,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  badgeText: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  coachPanel: {
+    gap: 12,
+    marginBottom: 18,
+  },
+  personalityGrid: {
+    gap: 10,
+  },
+  personalityItem: {
+    gap: 7,
+  },
+  personalityButton: {
+    justifyContent: "flex-start",
+  },
+  personalitySelected: {
+    backgroundColor: "#3A3219",
+    borderColor: palette.gold,
+    justifyContent: "flex-start",
+  },
+  personalityText: {
+    color: palette.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  personalityTextSelected: {
+    color: palette.goldSoft,
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 18,
   },
   panelTitle: {
     color: palette.ink,

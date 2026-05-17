@@ -138,11 +138,33 @@ export default function CoachScreen({ showBack = true }) {
           <ActivityIndicator size="large" color={palette.gold} />
         </PremiumPanel>
       ) : feedback ? (
-        <View style={styles.statsRow}>
-          <StatPill icon="chart-line" value={`${feedback.average_accuracy}%`} label="accuracy" tone="gold" />
-          <StatPill icon="alert-octagon" value={feedback.total_blunders} label="blunders" tone="wine" />
-          <StatPill icon="puzzle" value={`${feedback.puzzle_success_rate}%`} label="puzzles" />
-        </View>
+        <>
+          <View style={styles.statsRow}>
+            <StatPill icon="school" value={feedback.skill_profile?.detected_level || "Unknown"} label="skill" tone="gold" />
+            <StatPill icon="chart-line" value={`${feedback.average_accuracy}%`} label="accuracy" />
+            <StatPill icon="alert-octagon" value={feedback.total_blunders} label="blunders" tone="wine" />
+          </View>
+
+          {feedback.skill_profile ? (
+            <PremiumPanel style={styles.skillPanel}>
+              <View style={styles.skillTopLine}>
+                <Text style={styles.skillTitle}>Adaptive coaching</Text>
+                <Text style={styles.confidenceBadge}>{feedback.skill_profile.confidence}</Text>
+              </View>
+              <Text style={styles.skillText}>
+                {feedback.skill_profile.adaptation.coaching_language}
+              </Text>
+              <View style={styles.adaptationRow}>
+                <Text style={styles.adaptationText}>
+                  {feedback.skill_profile.adaptation.puzzle_difficulty}
+                </Text>
+                <Text style={styles.engineDepth}>
+                  Depth {feedback.skill_profile.adaptation.engine_depth}
+                </Text>
+              </View>
+            </PremiumPanel>
+          ) : null}
+        </>
       ) : null}
 
       <SectionHeader label="Coach Tools" />
@@ -279,6 +301,65 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
     marginBottom: 14,
+  },
+  skillPanel: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  skillTopLine: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  skillTitle: {
+    color: palette.ink,
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  skillText: {
+    color: palette.muted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  confidenceBadge: {
+    backgroundColor: "#3A3219",
+    borderColor: palette.gold,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: palette.goldSoft,
+    fontSize: 12,
+    fontWeight: "900",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    textTransform: "uppercase",
+  },
+  adaptationRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  adaptationText: {
+    backgroundColor: palette.ivory,
+    borderColor: palette.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: palette.mutedDark,
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    minWidth: 190,
+    padding: 10,
+  },
+  engineDepth: {
+    backgroundColor: "#243A2D",
+    borderRadius: 8,
+    color: palette.ink,
+    fontSize: 13,
+    fontWeight: "900",
+    paddingHorizontal: 10,
+    paddingVertical: 10,
   },
   featureButton: {
     flexGrow: 1,

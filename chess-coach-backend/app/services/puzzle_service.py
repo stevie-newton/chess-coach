@@ -1,4 +1,5 @@
 import io
+import chess
 import chess.pgn
 
 from sqlalchemy.orm import Session
@@ -26,6 +27,73 @@ def theme_from_move_analysis(move_analysis: MoveAnalysis):
         return "improve move precision"
 
     return "best move training"
+
+
+def _parse_move(board: chess.Board, move_text: str):
+    normalized = (move_text or "").strip()
+    if not normalized:
+        return None
+
+    try:
+        move = chess.Move.from_uci(normalized.lower())
+        if move in board.legal_moves:
+            return move
+    except ValueError:
+        pass
+
+    try:
+        return board.parse_san(normalized)
+    except ValueError:
+        return None
+
+
+def validate_puzzle_attempt(fen: str, user_move: str, best_move: str):
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        return {
+            "is_legal": False,
+            "is_correct": False,
+            "normalized_user_move": user_move,
+            "normalized_best_move": best_move,
+            "message": "Puzzle position is invalid",
+            "feedback": "This puzzle has an invalid FEN and cannot be checked safely.",
+        }
+
+    parsed_user_move = _parse_move(board, user_move)
+    parsed_best_move = _parse_move(board, best_move)
+
+    if not parsed_user_move:
+        side_to_move = "White" if board.turn == chess.WHITE else "Black"
+        return {
+            "is_legal": False,
+            "is_correct": False,
+            "normalized_user_move": (user_move or "").strip(),
+            "normalized_best_move": parsed_best_move.uci() if parsed_best_move else best_move,
+            "user_move_san": None,
+            "best_move_san": board.san(parsed_best_move) if parsed_best_move else None,
+            "message": "Illegal move",
+            "feedback": f"{side_to_move} cannot play that move from this position. Try selecting a legal move first.",
+        }
+
+    is_correct = parsed_best_move is not None and parsed_user_move == parsed_best_move
+    user_move_san = board.san(parsed_user_move)
+    best_move_san = board.san(parsed_best_move) if parsed_best_move else None
+
+    return {
+        "is_legal": True,
+        "is_correct": is_correct,
+        "normalized_user_move": parsed_user_move.uci(),
+        "normalized_best_move": parsed_best_move.uci() if parsed_best_move else best_move,
+        "user_move_san": user_move_san,
+        "best_move_san": best_move_san,
+        "message": "Correct!" if is_correct else "Incorrect",
+        "feedback": (
+            "Excellent tactical vision. Your move matches the engine best move."
+            if is_correct
+            else "That move is legal, but it does not match the engine best move for this position."
+        ),
+    }
 
 
 def generate_puzzles_from_game(db: Session, user_id: int, game):

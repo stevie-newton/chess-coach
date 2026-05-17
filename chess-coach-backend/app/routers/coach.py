@@ -56,6 +56,7 @@ def ask_coach(
         feature="Ask Coach",
         prompt=payload.question,
         context="\n\n".join(context_parts),
+        coach_personality=current_user.coach_personality,
     )
 
     return {"feature": "Ask Coach", "answer": answer}
@@ -74,6 +75,7 @@ def game_summary_coach(
             "biggest mistakes, best practical lesson, and 3 training takeaways."
         ),
         context=game_context(db, current_user.id, payload.game_id),
+        coach_personality=current_user.coach_personality,
     )
 
     return {"feature": "Game Summary Coach", "answer": answer}
@@ -92,6 +94,7 @@ def explain_mistake(
             "and give one practical rule I can use next time."
         ),
         context=move_context(db, current_user.id, payload.move_analysis_id),
+        coach_personality=current_user.coach_personality,
     )
 
     return {"feature": "Explain My Mistake", "answer": answer}
@@ -110,6 +113,7 @@ def weekly_improvement_plan(
             f"Assume {payload.focus_minutes_per_day} minutes per day. Make it practical and specific."
         ),
         context=user_summary_context(db, current_user.id),
+        coach_personality=current_user.coach_personality,
     )
 
     return {"feature": "Weekly Improvement Plan", "answer": answer}
@@ -136,6 +140,7 @@ def tournament_advice(
             "time management, mindset, and what to review after each game."
         ),
         context=f"{user_summary_context(db, current_user.id)}\n\nTournament request:\n{event_context}",
+        coach_personality=current_user.coach_personality,
     )
 
     return {"feature": "Tournament Advice", "answer": answer}

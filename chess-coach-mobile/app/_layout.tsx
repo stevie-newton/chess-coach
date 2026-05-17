@@ -19,6 +19,8 @@ export default function RootLayout() {
         <Stack.Screen name="openings" options={{ title: "Openings" }} />
         <Stack.Screen name="opening-practice" options={{ title: "Opening Practice" }} />
         <Stack.Screen name="opening-lines" options={{ title: "Opening Lines" }} />
+        <Stack.Screen name="endgames" options={{ title: "Endgames" }} />
+        <Stack.Screen name="calculation-training" options={{ title: "Calculation Training" }} />
         <Stack.Screen name="tournaments" options={{ title: "Tournaments" }} />
         <Stack.Screen name="weaknesses" options={{ title: "Weaknesses" }} />
       </Stack>

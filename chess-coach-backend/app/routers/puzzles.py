@@ -9,7 +9,9 @@ from app.models.game import Game
 from app.models.analysis import MoveAnalysis
 from app.models.puzzle import Puzzle, PuzzleAttempt
 from app.schemas.puzzle import PuzzleResponse, PuzzleAttemptCreate, PuzzleAttemptResponse
-from app.services.puzzle_service import generate_puzzles_from_game
+from app.services.explanation_engine_service import explain_puzzle_attempt
+from app.services.progression_service import award_xp
+from app.services.puzzle_service import generate_puzzles_from_game, validate_puzzle_attempt
 from app.services.spaced_repetition_service import update_review_state
 
 
@@ -99,11 +101,17 @@ def attempt_puzzle(
             detail="Puzzle not found"
         )
 
-    is_correct = payload.user_move.strip().lower() == puzzle.solution.strip().lower()
+    validation = validate_puzzle_attempt(
+        fen=puzzle.fen,
+        user_move=payload.user_move,
+        best_move=puzzle.solution,
+    )
+    is_legal = validation["is_legal"]
+    is_correct = validation["is_correct"]
     move_analysis = None
     review_state = None
 
-    if puzzle.move_analysis_id:
+    if is_legal and puzzle.move_analysis_id:
         move_analysis = (
             db.query(MoveAnalysis)
             .filter(MoveAnalysis.id == puzzle.move_analysis_id)
@@ -116,6 +124,13 @@ def attempt_puzzle(
             is_correct=is_correct
         )
 
+    explanation, explanation_source = explain_puzzle_attempt(
+        puzzle=puzzle,
+        validation=validation,
+        move_analysis=move_analysis,
+        coach_personality=current_user.coach_personality,
+    )
+
     if is_correct:
         current_user.puzzle_streak = (current_user.puzzle_streak or 0) + 1
         current_user.puzzle_rating = (current_user.puzzle_rating or 1200) + 10
@@ -126,7 +141,7 @@ def attempt_puzzle(
     attempt = PuzzleAttempt(
         puzzle_id=puzzle.id,
         user_id=current_user.id,
-        user_move=payload.user_move,
+        user_move=validation["normalized_user_move"],
         is_correct=is_correct,
         time_taken_seconds=payload.time_taken_seconds
     )
@@ -135,6 +150,7 @@ def attempt_puzzle(
     db.commit()
     db.refresh(attempt)
     db.refresh(current_user)
+    progression = award_xp(db=db, user=current_user, amount=15 if is_correct else 4)
 
     spaced_repetition = None
     if review_state:
@@ -151,15 +167,15 @@ def attempt_puzzle(
         "user_move": attempt.user_move,
         "is_correct": attempt.is_correct,
         "time_taken_seconds": attempt.time_taken_seconds,
-        "message": "Correct!" if is_correct else "Incorrect",
-        "feedback": (
-            "Excellent tactical vision."
-            if is_correct
-            else "That move misses a tactical opportunity."
-        ),
-        "explanation": move_analysis.explanation if move_analysis else None,
+        "message": validation["message"],
+        "feedback": validation["feedback"],
+        "is_legal": is_legal,
+        "best_move": validation["normalized_best_move"],
+        "explanation": explanation,
+        "explanation_source": explanation_source,
         "puzzle_rating": current_user.puzzle_rating,
         "puzzle_streak": current_user.puzzle_streak,
         "spaced_repetition": spaced_repetition,
+        "progression": progression,
         "created_at": attempt.created_at,
     }

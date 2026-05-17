@@ -7,9 +7,14 @@ from app.models.weakness import Weakness
 from app.models.training import TrainingSession
 from app.models.puzzle import PuzzleAttempt
 from app.models.tournament import TournamentSimulation
+from app.models.user import User
+from app.services.skill_profile_service import detect_skill_profile
 
 
 def generate_coach_feedback(db: Session, user_id: int):
+    user = db.query(User).filter(User.id == user_id).first()
+    skill_profile = detect_skill_profile(db=db, user=user) if user else None
+
     analyzed_games = (
         db.query(GameAnalysis)
         .join(Game, Game.id == GameAnalysis.game_id)
@@ -151,11 +156,23 @@ def generate_coach_feedback(db: Session, user_id: int):
             "You are on the right path. Keep analyzing your games, solving personalized puzzles, and reviewing your opening repertoire every week."
         )
 
+    if skill_profile:
+        feedback.insert(
+            0,
+            (
+                f"Detected level: {skill_profile['detected_level']} "
+                f"({skill_profile['confidence'].lower()} confidence). "
+                f"I will adapt with {skill_profile['adaptation']['puzzle_difficulty'].lower()} and "
+                f"{skill_profile['adaptation']['coaching_language'].lower()}."
+            )
+        )
+
     return {
         "average_accuracy": round(avg_accuracy, 2),
         "total_blunders": total_blunders,
         "training_completion_rate": training_completion_rate,
         "puzzle_success_rate": puzzle_success_rate,
         "tournament_win_rate": tournament_win_rate,
+        "skill_profile": skill_profile,
         "coach_feedback": feedback
     }

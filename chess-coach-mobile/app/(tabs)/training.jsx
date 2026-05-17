@@ -1,5 +1,5 @@
-import DailyTrainingScreen from "../../src/screens/DailyTrainingScreen";
+import TrainingScreen from "../../src/screens/TrainingScreen";
 
 export default function TrainingTab() {
-  return <DailyTrainingScreen showBack={false} />;
+  return <TrainingScreen showBack={false} />;
 }
