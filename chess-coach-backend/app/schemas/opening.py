@@ -70,12 +70,6 @@ class OpeningPracticeAttemptResponse(BaseModel):
         from_attributes = True
 
 
-class OpeningPracticeSessionResponse(BaseModel):
-    opening: OpeningResponse
-    lines: list[OpeningLineResponse]
-    progress: OpeningProgressResponse
-
-
 class OpeningProgressWeakLine(BaseModel):
     opening_line_id: int
     move_order: int
@@ -99,3 +93,9 @@ class OpeningProgressResponse(BaseModel):
     weak_lines: list[OpeningProgressWeakLine]
     summary: str
     focus: Optional[str] = None
+
+
+class OpeningPracticeSessionResponse(BaseModel):
+    opening: OpeningResponse
+    lines: list[OpeningLineResponse]
+    progress: OpeningProgressResponse
