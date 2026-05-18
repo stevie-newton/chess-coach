@@ -46,7 +46,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <AppShell scroll={false} contentStyle={styles.container}>
+    <AppShell contentStyle={styles.container}>
       <View style={styles.hero}>
         <BrandMark />
       </View>
@@ -77,6 +77,7 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flexGrow: 1,
     justifyContent: "center",
   },
   hero: {

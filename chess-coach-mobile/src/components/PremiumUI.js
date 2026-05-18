@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export const palette = {
@@ -41,41 +42,150 @@ export function AppShell({
   const Container = scroll ? ScrollView : View;
   const containerProps = scroll
     ? {
+        style: styles.contentLayer,
         contentContainerStyle: [styles.scrollContent, contentStyle],
+        automaticallyAdjustKeyboardInsets: Platform.OS === "ios",
+        keyboardDismissMode: Platform.OS === "ios" ? "interactive" : "on-drag",
+        keyboardShouldPersistTaps: "handled",
         showsVerticalScrollIndicator: false,
       }
-    : { style: [styles.staticContent, contentStyle] };
+    : { style: [styles.staticContent, styles.contentLayer, contentStyle] };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={palette.ivory} />
-      <Container {...containerProps}>
-        <View style={styles.topBar}>
-          {showBack ? (
-            <IconButton icon="arrow-left" onPress={() => router.back()} />
-          ) : (
-            <BrandMark />
-          )}
-          {action}
-        </View>
-
-        {(eyebrow || title || subtitle) && (
-          <View style={styles.header}>
-            {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-            {title ? <Text style={styles.title}>{title}</Text> : null}
-            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      <LiquidBackdrop />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
+        style={styles.keyboardAvoider}
+      >
+        <Container {...containerProps}>
+          <View style={styles.topBar}>
+            {showBack ? (
+              <IconButton icon="arrow-left" onPress={() => router.back()} />
+            ) : (
+              <BrandMark />
+            )}
+            {action}
           </View>
-        )}
 
-        {children}
-      </Container>
+          {(eyebrow || title || subtitle) && (
+            <View style={styles.header}>
+              {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+              {title ? <Text style={styles.title}>{title}</Text> : null}
+              {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+            </View>
+          )}
+
+          {children}
+        </Container>
+      </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function LiquidBackdrop() {
+  const drift = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(drift, {
+          toValue: 1,
+          duration: 7200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(drift, {
+          toValue: 0,
+          duration: 7200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    animation.start();
+    return () => animation.stop();
+  }, [drift]);
+
+  const primaryShift = drift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-26, 28],
+  });
+  const secondaryShift = drift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [22, -24],
+  });
+
+  return (
+    <View pointerEvents="none" style={styles.backdrop}>
+      <Animated.View
+        style={[
+          styles.liquidBand,
+          styles.liquidBandGold,
+          { transform: [{ translateY: primaryShift }, { rotate: "-9deg" }] },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.liquidBand,
+          styles.liquidBandTeal,
+          { transform: [{ translateY: secondaryShift }, { rotate: "11deg" }] },
+        ]}
+      />
+      <View style={styles.backdropVeil} />
+    </View>
+  );
+}
+
+function GlassSheen({ compact = false }) {
+  const shine = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.delay(compact ? 1800 : 1100),
+        Animated.timing(shine, {
+          toValue: 1,
+          duration: compact ? 1800 : 2400,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(shine, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    animation.start();
+    return () => animation.stop();
+  }, [compact, shine]);
+
+  const translateX = shine.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-180, 240],
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.glassSheen,
+        compact && styles.glassSheenCompact,
+        { transform: [{ translateX }, { rotate: "-18deg" }] },
+      ]}
+    />
   );
 }
 
 export function BrandMark({ label = "CC" }) {
   return (
     <View style={styles.brandMark}>
+      <GlassSheen compact />
       <MaterialCommunityIcons name="chess-king" size={18} color={palette.gold} />
       <Text style={styles.brandText}>{label}</Text>
     </View>
@@ -114,6 +224,7 @@ export function PrimaryButton({ title, icon = "arrow-right", onPress, tone = "da
         style,
       ]}
     >
+      <GlassSheen compact />
       <Text style={[styles.primaryButtonText, isLight && styles.primaryButtonTextLight]}>
         {title}
       </Text>
@@ -139,6 +250,7 @@ export function SecondaryButton({ title, icon, onPress, disabled = false, style 
         style,
       ]}
     >
+      <GlassSheen compact />
       {icon ? <MaterialCommunityIcons name={icon} size={18} color={palette.ink} /> : null}
       <Text style={styles.secondaryButtonText}>{title}</Text>
     </Pressable>
@@ -224,7 +336,12 @@ export function ChessAccent({ size = 132, compact = false }) {
 }
 
 export function PremiumPanel({ children, style, dark = false }) {
-  return <View style={[styles.panel, dark && styles.panelDark, style]}>{children}</View>;
+  return (
+    <View style={[styles.panel, dark && styles.panelDark, style]}>
+      <GlassSheen />
+      {children}
+    </View>
+  );
 }
 
 export function EmptyState({ icon, title, body, actionTitle, onAction }) {
@@ -262,6 +379,38 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: palette.ivory,
     flex: 1,
+  },
+  keyboardAvoider: {
+    flex: 1,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: palette.ivory,
+    overflow: "hidden",
+  },
+  backdropVeil: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15,17,21,0.78)",
+  },
+  liquidBand: {
+    borderRadius: 8,
+    height: 180,
+    left: -45,
+    opacity: 0.26,
+    position: "absolute",
+    right: -45,
+  },
+  liquidBandGold: {
+    backgroundColor: "rgba(215,179,90,0.46)",
+    top: 96,
+  },
+  liquidBandTeal: {
+    backgroundColor: "rgba(46,125,136,0.38)",
+    bottom: 118,
+  },
+  contentLayer: {
+    position: "relative",
+    zIndex: 1,
   },
   scrollContent: {
     flexGrow: 1,
@@ -304,14 +453,16 @@ const styles = StyleSheet.create({
   },
   brandMark: {
     alignItems: "center",
-    backgroundColor: palette.charcoal,
-    borderColor: palette.gold,
+    backgroundColor: "rgba(36,40,50,0.78)",
+    borderColor: "rgba(215,179,90,0.72)",
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
     gap: 7,
     minHeight: 44,
+    overflow: "hidden",
     paddingHorizontal: 11,
+    position: "relative",
   },
   brandText: {
     color: palette.ink,
@@ -341,14 +492,16 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: "center",
-    backgroundColor: palette.gold,
+    backgroundColor: "rgba(215,179,90,0.92)",
     borderRadius: 8,
     flexDirection: "row",
     gap: 9,
     justifyContent: "center",
     minHeight: 52,
+    overflow: "hidden",
     paddingHorizontal: 18,
     paddingVertical: Platform.OS === "web" ? 12 : 0,
+    position: "relative",
   },
   primaryButtonLight: {
     backgroundColor: palette.goldSoft,
@@ -363,16 +516,18 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: "center",
-    backgroundColor: palette.paper,
-    borderColor: palette.line,
+    backgroundColor: "rgba(24,27,34,0.76)",
+    borderColor: "rgba(255,255,255,0.12)",
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
     justifyContent: "center",
     minHeight: 50,
+    overflow: "hidden",
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === "web" ? 11 : 0,
+    position: "relative",
   },
   secondaryButtonText: {
     color: palette.ink,
@@ -499,16 +654,30 @@ const styles = StyleSheet.create({
     backgroundColor: "#D4AF37",
   },
   panel: {
-    backgroundColor: palette.paper,
-    borderColor: palette.line,
+    backgroundColor: "rgba(24,27,34,0.76)",
+    borderColor: "rgba(255,255,255,0.12)",
     borderRadius: 8,
     borderWidth: 1,
+    overflow: "hidden",
     padding: 17,
+    position: "relative",
     ...shadow,
   },
   panelDark: {
-    backgroundColor: palette.charcoal,
-    borderColor: palette.lineDark,
+    backgroundColor: "rgba(36,40,50,0.82)",
+    borderColor: "rgba(255,255,255,0.16)",
+  },
+  glassSheen: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+    bottom: -80,
+    position: "absolute",
+    top: -80,
+    width: 54,
+    zIndex: 0,
+  },
+  glassSheenCompact: {
+    backgroundColor: "rgba(255,255,255,0.16)",
+    width: 32,
   },
   emptyState: {
     alignItems: "center",

@@ -32,7 +32,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <AppShell scroll={false} contentStyle={styles.container}>
+    <AppShell contentStyle={styles.container}>
       <View style={styles.hero}>
         <BrandMark />
         <ChessAccent size={146} />
@@ -83,6 +83,7 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flexGrow: 1,
     justifyContent: "center",
   },
   hero: {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { api } from "../api/client";
 import ChessboardWithArrows from "../components/ChessboardWithArrows";
 import {
@@ -16,6 +16,7 @@ import {
 const SOLUTION_REVEAL_FAILS = 3;
 
 export default function PuzzlesScreen({ showBack = true }) {
+  const { width } = useWindowDimensions();
   const [puzzles, setPuzzles] = useState([]);
   const [moves, setMoves] = useState({});
   const [feedbackByPuzzle, setFeedbackByPuzzle] = useState({});
@@ -49,6 +50,8 @@ export default function PuzzlesScreen({ showBack = true }) {
 
     return "Unknown";
   };
+
+  const boardSize = Math.max(236, Math.min(300, width - 92));
 
   const buildSolvedMoveFeedback = (puzzle) => {
     const feedback = feedbackByPuzzle[puzzle.id];
@@ -361,7 +364,7 @@ export default function PuzzlesScreen({ showBack = true }) {
                 <View style={styles.boardWrap}>
                   <ChessboardWithArrows
                     fen={puzzle.fen}
-                    boardSize={300}
+                    boardSize={boardSize}
                     withLetters={true}
                     withNumbers={true}
                     onMove={(move) => stageMove(puzzle.id, move)}

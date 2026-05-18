@@ -273,7 +273,7 @@ export default function ChessboardWithArrows({
   return (
     <View
       ref={boardContainerRef}
-      style={styles.container}
+      style={[styles.container, { width: boardSize, height: boardSize }]}
       {...panResponder.panHandlers}
     >
       <View style={{ width: boardSize, height: boardSize }}>
