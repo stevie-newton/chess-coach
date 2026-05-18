@@ -17,6 +17,7 @@ const SOLUTION_REVEAL_FAILS = 3;
 
 export default function PuzzlesScreen({ showBack = true }) {
   const { width } = useWindowDimensions();
+  const [boardWrapWidth, setBoardWrapWidth] = useState(0);
   const [puzzles, setPuzzles] = useState([]);
   const [moves, setMoves] = useState({});
   const [feedbackByPuzzle, setFeedbackByPuzzle] = useState({});
@@ -51,7 +52,7 @@ export default function PuzzlesScreen({ showBack = true }) {
     return "Unknown";
   };
 
-  const boardSize = Math.max(236, Math.min(300, width - 92));
+  const boardSize = Math.max(200, Math.min(300, (boardWrapWidth || width - 74) - 18));
 
   const buildSolvedMoveFeedback = (puzzle) => {
     const feedback = feedbackByPuzzle[puzzle.id];
@@ -361,7 +362,10 @@ export default function PuzzlesScreen({ showBack = true }) {
                   </View>
                 ) : null}
 
-                <View style={styles.boardWrap}>
+                <View
+                  style={styles.boardWrap}
+                  onLayout={(event) => setBoardWrapWidth(event.nativeEvent.layout.width)}
+                >
                   <ChessboardWithArrows
                     fen={puzzle.fen}
                     boardSize={boardSize}
