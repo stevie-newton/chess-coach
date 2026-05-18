@@ -10,7 +10,6 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "2",
       "bundleIdentifier": "com.borbin.chesscoachmobile",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -18,7 +17,6 @@
     },
     "android": {
       "package": "com.borbin.chesscoachmobile",
-      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

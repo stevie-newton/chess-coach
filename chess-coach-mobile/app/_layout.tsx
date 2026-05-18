@@ -4,25 +4,26 @@ import { AuthProvider } from "../src/context/AuthContext";
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <Stack screenOptions={{ headerShown: true }}>
-        <Stack.Screen name="index" options={{ title: "Chess Coach" }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/login" options={{ title: "Login" }} />
-        <Stack.Screen name="auth/register" options={{ title: "Register" }} />
-        <Stack.Screen name="import-games" options={{ title: "Import Games" }} />
-        <Stack.Screen name="game-session" options={{ title: "Game Session" }} />
-        <Stack.Screen name="game-detail" options={{ title: "Game Detail" }} />
-        <Stack.Screen name="daily-training" options={{ title: "Daily Training" }} />
-        <Stack.Screen name="mistake-replay" options={{ title: "Mistake Replay" }} />
-        <Stack.Screen name="coach" options={{ title: "AI Coach" }} />
-        <Stack.Screen name="study-schedule" options={{ title: "Study Schedule" }} />
-        <Stack.Screen name="openings" options={{ title: "Openings" }} />
-        <Stack.Screen name="opening-practice" options={{ title: "Opening Practice" }} />
-        <Stack.Screen name="opening-lines" options={{ title: "Opening Lines" }} />
-        <Stack.Screen name="endgames" options={{ title: "Endgames" }} />
-        <Stack.Screen name="calculation-training" options={{ title: "Calculation Training" }} />
-        <Stack.Screen name="tournaments" options={{ title: "Tournaments" }} />
-        <Stack.Screen name="weaknesses" options={{ title: "Weaknesses" }} />
+        <Stack.Screen name="auth/login" />
+        <Stack.Screen name="auth/register" />
+        <Stack.Screen name="import-games" />
+        <Stack.Screen name="game-session" />
+        <Stack.Screen name="game-detail" />
+        <Stack.Screen name="daily-training" />
+        <Stack.Screen name="mistake-replay" />
+        <Stack.Screen name="coach" />
+        <Stack.Screen name="study-schedule" />
+        <Stack.Screen name="openings" />
+        <Stack.Screen name="opening-practice" />
+        <Stack.Screen name="opening-detail" />
+        <Stack.Screen name="opening-lines" />
+        <Stack.Screen name="endgames" />
+        <Stack.Screen name="calculation-training" />
+        <Stack.Screen name="tournaments" />
+        <Stack.Screen name="weaknesses" />
       </Stack>
     </AuthProvider>
   );

@@ -29,9 +29,13 @@ export default function ChessboardWithArrows({
       const file = String.fromCharCode(97 + column);
       const rank = 8 - row;
 
-      return `${file}${rank}`;
+      return {
+        id: `${file}${rank}`,
+        left: column * squareSize,
+        top: row * squareSize,
+      };
     });
-  }, []);
+  }, [squareSize]);
 
   const pieceMap = React.useMemo(() => {
     const pieces = {};
@@ -143,7 +147,8 @@ export default function ChessboardWithArrows({
     square,
     color = "rgba(212, 175, 55, 0.34)",
     borderColor = "rgba(212, 175, 55, 0.95)",
-    key = null
+    key = null,
+    showDot = false
   ) => {
     if (!square) {
       return null;
@@ -169,7 +174,9 @@ export default function ChessboardWithArrows({
             top: coords.y - squareSize / 2,
           },
         ]}
-      />
+      >
+        {showDot ? <View style={styles.selectionDot} /> : null}
+      </View>
     );
   };
 
@@ -237,7 +244,7 @@ export default function ChessboardWithArrows({
           {...props}
         />
       </View>
-      {renderSquareHighlight(selectedSquare)}
+      {renderSquareHighlight(selectedSquare, undefined, undefined, "selected-square", true)}
       {highlights.map((highlight, index) =>
         renderSquareHighlight(
           highlight.square,
@@ -255,11 +262,19 @@ export default function ChessboardWithArrows({
       <View pointerEvents="box-none" style={styles.tapGrid}>
         {boardSquares.map((square) => (
           <Pressable
-            key={square}
-            accessibilityLabel={`Chess square ${square}`}
+            key={square.id}
+            accessibilityLabel={`Chess square ${square.id}`}
             accessibilityRole="button"
-            onPress={() => handleSquareTap(square)}
-            style={styles.tapSquare}
+            onPressIn={() => handleSquareTap(square.id)}
+            style={[
+              styles.tapSquare,
+              {
+                height: squareSize,
+                left: square.left,
+                top: square.top,
+                width: squareSize,
+              },
+            ]}
           />
         ))}
       </View>
@@ -278,17 +293,24 @@ const styles = StyleSheet.create({
   },
   tapGrid: {
     ...StyleSheet.absoluteFillObject,
-    flexDirection: "row",
-    flexWrap: "wrap",
+    elevation: 30,
+    zIndex: 30,
   },
   tapSquare: {
-    height: "12.5%",
-    width: "12.5%",
+    position: "absolute",
   },
   squareHighlight: {
     backgroundColor: "rgba(212, 175, 55, 0.34)",
+    alignItems: "center",
     borderColor: "rgba(212, 175, 55, 0.95)",
     borderWidth: 3,
+    justifyContent: "center",
     position: "absolute",
+  },
+  selectionDot: {
+    backgroundColor: "rgba(215,179,90,0.96)",
+    borderRadius: 8,
+    height: 16,
+    width: 16,
   },
 });

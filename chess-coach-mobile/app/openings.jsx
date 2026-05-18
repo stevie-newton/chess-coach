@@ -1,5 +1,7 @@
-import { router } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
   AppShell,
   FeatureRow,
@@ -10,6 +12,13 @@ import {
   palette,
 } from "../src/components/PremiumUI";
 import OpeningBoard from "../src/components/OpeningBoard";
+import { openingLibrary, recommendedOpenings } from "../src/data/openingLibrary";
+import {
+  buildAdaptiveOpeningReport,
+  getOpeningProgress,
+  getSavedRepertoire,
+  toggleSavedOpening,
+} from "../src/utils/repertoireStorage";
 
 const openingLayers = [
   {
@@ -63,6 +72,69 @@ const sampleOpeningPosition = {
 };
 
 export default function Openings() {
+  const [savedRepertoire, setSavedRepertoire] = useState([]);
+  const [adaptiveReport, setAdaptiveReport] = useState([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      Promise.all([getSavedRepertoire(), getOpeningProgress()]).then(([repertoire, progress]) => {
+        if (active) {
+          setSavedRepertoire(repertoire);
+          setAdaptiveReport(buildAdaptiveOpeningReport(progress, repertoire));
+        }
+      });
+
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
+  const handleToggleOpening = async (opening) => {
+    const result = await toggleSavedOpening(opening);
+    setSavedRepertoire(result.repertoire);
+    const progress = await getOpeningProgress();
+    setAdaptiveReport(buildAdaptiveOpeningReport(progress, result.repertoire));
+  };
+
+  const renderOpeningRow = (opening, recommended = false) => {
+    const saved = savedRepertoire.includes(opening);
+
+    return (
+      <Pressable
+        key={opening}
+        accessibilityRole="button"
+        onPress={() => router.push({ pathname: "/opening-detail", params: { name: opening } })}
+        style={({ pressed }) => [
+          recommended ? styles.recommendedRow : styles.openingRow,
+          pressed && styles.openingRowPressed,
+        ]}
+      >
+        <MaterialCommunityIcons name={saved ? "check-circle" : "circle-outline"} size={19} color={palette.gold} />
+        <Text style={styles.openingName}>{opening}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={saved ? `Remove ${opening} from repertoire` : `Save ${opening} to repertoire`}
+          hitSlop={10}
+          onPress={(event) => {
+            event.stopPropagation();
+            handleToggleOpening(opening);
+          }}
+          style={({ pressed }) => [styles.saveButton, pressed && styles.saveButtonPressed]}
+        >
+          <MaterialCommunityIcons
+            name={saved ? "bookmark-check" : "bookmark-outline"}
+            size={22}
+            color={saved ? palette.goldSoft : palette.muted}
+          />
+        </Pressable>
+        <MaterialCommunityIcons name="chevron-right" size={21} color={palette.muted} />
+      </Pressable>
+    );
+  };
+
   return (
     <AppShell
       showBack
@@ -72,8 +144,70 @@ export default function Openings() {
     >
       <View style={styles.statsRow}>
         <StatPill icon="layers-triple" value="5" label="layers" tone="gold" />
-        <StatPill icon="bookshelf" value="Repertoire" label="parent" tone="sage" />
+        <StatPill icon="bookshelf" value={savedRepertoire.length} label="saved" tone="sage" />
+        <StatPill icon="target" value={adaptiveReport.length} label="weak spots" tone="wine" />
       </View>
+
+      <SectionHeader label="Adaptive Learning" />
+      <PremiumPanel dark style={styles.adaptivePanel}>
+        <View style={styles.adaptiveHeader}>
+          <MaterialCommunityIcons name="brain" size={24} color={palette.goldSoft} />
+          <View style={styles.adaptiveHeaderText}>
+            <Text style={styles.adaptiveTitle}>Automatic retraining queue.</Text>
+            <Text style={styles.adaptiveText}>
+              The app tracks forgotten lines, mistakes, and weak variations, then pushes the hardest openings back into practice.
+            </Text>
+          </View>
+        </View>
+
+        {adaptiveReport.length ? (
+          <View style={styles.adaptiveList}>
+            {adaptiveReport.slice(0, 3).map((item) => (
+              <Pressable
+                key={item.openingName}
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: "/opening-detail", params: { name: item.openingName, practice: Date.now().toString() } })}
+                style={({ pressed }) => [styles.adaptiveCard, pressed && styles.openingRowPressed]}
+              >
+                <View style={styles.adaptiveCardTop}>
+                  <Text style={styles.adaptiveOpeningName}>{item.openingName}</Text>
+                  <Text style={styles.adaptiveMistakes}>{item.mistakes} mistakes</Text>
+                </View>
+                <Text style={styles.adaptiveIssue}>Forgotten line: {item.forgottenLine}</Text>
+                <Text style={styles.adaptiveIssue}>Weak variation: {item.weakVariation}</Text>
+                <View style={styles.adaptiveAction}>
+                  <Text style={styles.adaptiveActionText}>Retrain now</Text>
+                  <MaterialCommunityIcons name="arrow-right" size={18} color={palette.goldSoft} />
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.adaptiveEmpty}>
+            <Text style={styles.adaptiveEmptyTitle}>No weak openings yet.</Text>
+            <Text style={styles.adaptiveText}>
+              Practice an opening board or quiz. Missed moves will appear here for automatic review.
+            </Text>
+          </View>
+        )}
+      </PremiumPanel>
+
+      <SectionHeader label="My Repertoire" />
+      <PremiumPanel style={styles.myRepertoirePanel}>
+        {savedRepertoire.length ? (
+          <View style={styles.openingList}>
+            {savedRepertoire.map((opening) => renderOpeningRow(opening))}
+          </View>
+        ) : (
+          <View style={styles.emptyRepertoire}>
+            <MaterialCommunityIcons name="bookmark-plus-outline" size={24} color={palette.gold} />
+            <Text style={styles.emptyRepertoireTitle}>Save favorite openings here.</Text>
+            <Text style={styles.emptyRepertoireText}>
+              Tap the bookmark beside openings like London System, Sicilian Defense, or French Defense to build your repertoire.
+            </Text>
+          </View>
+        )}
+      </PremiumPanel>
 
       <PremiumPanel dark style={styles.systemPanel}>
         <Text style={styles.panelLabel}>Layer 1</Text>
@@ -94,6 +228,35 @@ export default function Openings() {
           tone="light"
           onPress={() => router.push("/opening-lines")}
         />
+      </PremiumPanel>
+
+      <SectionHeader label="Recommended Openings" />
+      <PremiumPanel style={styles.recommendationPanel}>
+        {recommendedOpenings.map((group) => (
+          <View key={group.style} style={styles.recommendationGroup}>
+            <Text style={styles.recommendationTitle}>{group.style}</Text>
+            <Text style={styles.recommendationNote}>{group.note}</Text>
+            <View style={styles.openingList}>
+              {group.openings.map((opening) => (
+                renderOpeningRow(opening, true)
+              ))}
+            </View>
+          </View>
+        ))}
+      </PremiumPanel>
+
+      <SectionHeader label="Opening Library" />
+      <PremiumPanel style={styles.libraryPanel}>
+        {Object.entries(openingLibrary).map(([color, openings]) => (
+          <View key={color} style={styles.libraryGroup}>
+            <Text style={styles.libraryGroupTitle}>For {color}</Text>
+            <View style={styles.openingList}>
+              {openings.map((opening) => (
+                renderOpeningRow(opening)
+              ))}
+            </View>
+          </View>
+        ))}
       </PremiumPanel>
 
       <SectionHeader label="Visual Opening Board" />
@@ -129,6 +292,107 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 18,
   },
+  myRepertoirePanel: {
+    gap: 12,
+    marginBottom: 18,
+  },
+  adaptivePanel: {
+    gap: 13,
+    marginBottom: 18,
+  },
+  adaptiveHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+  },
+  adaptiveHeaderText: {
+    flex: 1,
+  },
+  adaptiveTitle: {
+    color: palette.ink,
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: 25,
+  },
+  adaptiveText: {
+    color: palette.mutedDark,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  adaptiveList: {
+    gap: 9,
+  },
+  adaptiveCard: {
+    backgroundColor: palette.ivory,
+    borderColor: palette.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 7,
+    padding: 12,
+  },
+  adaptiveCardTop: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  adaptiveOpeningName: {
+    color: palette.ink,
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  adaptiveMistakes: {
+    color: palette.danger,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  adaptiveIssue: {
+    color: palette.mutedDark,
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 19,
+  },
+  adaptiveAction: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 2,
+  },
+  adaptiveActionText: {
+    color: palette.goldSoft,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  adaptiveEmpty: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.12)",
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+  },
+  adaptiveEmptyTitle: {
+    color: palette.ink,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  emptyRepertoire: {
+    alignItems: "flex-start",
+    gap: 7,
+  },
+  emptyRepertoireTitle: {
+    color: palette.ink,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  emptyRepertoireText: {
+    color: palette.mutedDark,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
   panelLabel: {
     color: palette.gold,
     fontSize: 12,
@@ -162,6 +426,80 @@ const styles = StyleSheet.create({
   exampleText: {
     color: palette.ink,
     fontSize: 13,
+    fontWeight: "800",
+  },
+  libraryPanel: {
+    gap: 18,
+    marginBottom: 18,
+  },
+  recommendationPanel: {
+    gap: 18,
+    marginBottom: 18,
+  },
+  recommendationGroup: {
+    gap: 9,
+  },
+  recommendationTitle: {
+    color: palette.goldSoft,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  recommendationNote: {
+    color: palette.mutedDark,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
+  libraryGroup: {
+    gap: 10,
+  },
+  libraryGroupTitle: {
+    color: palette.goldSoft,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  openingList: {
+    gap: 8,
+  },
+  openingRow: {
+    alignItems: "center",
+    backgroundColor: palette.ivory,
+    borderColor: palette.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 46,
+    paddingHorizontal: 12,
+  },
+  recommendedRow: {
+    alignItems: "center",
+    backgroundColor: "#243A2D",
+    borderColor: "rgba(255,255,255,0.14)",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 46,
+    paddingHorizontal: 12,
+  },
+  openingRowPressed: {
+    opacity: 0.76,
+    transform: [{ scale: 0.99 }],
+  },
+  saveButton: {
+    alignItems: "center",
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  saveButtonPressed: {
+    opacity: 0.68,
+  },
+  openingName: {
+    color: palette.ink,
+    flex: 1,
+    fontSize: 15,
     fontWeight: "800",
   },
 });

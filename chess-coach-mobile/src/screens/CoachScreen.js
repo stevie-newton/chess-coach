@@ -129,8 +129,8 @@ export default function CoachScreen({ showBack = true }) {
   return (
     <AppShell
       showBack={showBack}
-      eyebrow="AI Coach"
-      title="OpenAI coach."
+      eyebrow="Coach"
+      title="Coach."
       subtitle="Ask questions, summarize games, explain mistakes, plan training, and prepare for tournaments."
     >
       {loading ? (
@@ -261,7 +261,7 @@ export default function CoachScreen({ showBack = true }) {
         ) : null}
 
         <PrimaryButton
-          title={coachLoading ? "Thinking..." : "Ask OpenAI Coach"}
+          title={coachLoading ? "Thinking..." : "Ask Coach"}
           icon="creation"
           disabled={coachLoading}
           onPress={runCoachFeature}
