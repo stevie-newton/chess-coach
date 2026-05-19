@@ -8,10 +8,10 @@ from app.models.user import User
 from app.models.game import Game
 from app.models.analysis import MoveAnalysis
 from app.models.puzzle import Puzzle, PuzzleAttempt
-from app.schemas.puzzle import PuzzleResponse, PuzzleAttemptCreate, PuzzleAttemptResponse
+from app.schemas.puzzle import PuzzleResponse, PuzzleAttemptCreate, PuzzleAttemptResponse, PuzzleLineResponse
 from app.services.explanation_engine_service import explain_puzzle_attempt
 from app.services.progression_service import award_xp
-from app.services.puzzle_service import generate_puzzles_from_game, validate_puzzle_attempt
+from app.services.puzzle_service import build_puzzle_solution_line, generate_puzzles_from_game, validate_puzzle_attempt
 from app.services.spaced_repetition_service import update_review_state
 
 
@@ -80,6 +80,41 @@ def get_puzzle(
         )
 
     return puzzle
+
+
+@router.get("/{puzzle_id}/line", response_model=PuzzleLineResponse)
+def get_puzzle_solution_line(
+    puzzle_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    puzzle = (
+        db.query(Puzzle)
+        .filter(Puzzle.id == puzzle_id, Puzzle.user_id == current_user.id)
+        .first()
+    )
+
+    if not puzzle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Puzzle not found"
+        )
+
+    line = build_puzzle_solution_line(
+        fen=puzzle.fen,
+        solution=puzzle.solution,
+    )
+
+    if not line:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not generate a solution continuation for this puzzle"
+        )
+
+    return {
+        "puzzle_id": puzzle.id,
+        "line": line,
+    }
 
 
 @router.post("/{puzzle_id}/attempt", response_model=PuzzleAttemptResponse)

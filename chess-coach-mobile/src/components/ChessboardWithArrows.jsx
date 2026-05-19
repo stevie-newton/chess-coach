@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -15,11 +15,20 @@ export default function ChessboardWithArrows({
   onMove = null,
   arrows = [],
   highlights = [],
+  animateMoves = true,
+  moveAnimationDuration = 220,
+  autoMove = null,
+  onAutoMoveEnd = null,
+  resetToken = null,
+  durations,
   ...props
 }) {
   const [selectedSquare, setSelectedSquare] = useState(null);
+  const chessboardRef = useRef(null);
+  const isAnimatingMoveRef = useRef(false);
   const selectedSquareRef = useRef(null);
   const onMoveRef = useRef(onMove);
+  const onAutoMoveEndRef = useRef(onAutoMoveEnd);
   const pieceMapRef = useRef({});
   const squareSize = boardSize / 8;
   const boardSquares = React.useMemo(() => {
@@ -69,7 +78,55 @@ export default function ChessboardWithArrows({
   }, [fen]);
 
   onMoveRef.current = onMove;
+  onAutoMoveEndRef.current = onAutoMoveEnd;
   pieceMapRef.current = pieceMap;
+
+  const mergedDurations = React.useMemo(
+    () => ({
+      ...durations,
+      move: durations?.move ?? moveAnimationDuration,
+    }),
+    [durations, moveAnimationDuration]
+  );
+
+  useEffect(() => {
+    chessboardRef.current?.resetBoard?.(fen);
+    setSelected(null);
+  }, [fen, resetToken]);
+
+  useEffect(() => {
+    if (!autoMove?.from || !autoMove?.to || !chessboardRef.current?.move) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    const runAutoMove = async () => {
+      isAnimatingMoveRef.current = true;
+      chessboardRef.current.resetBoard?.(fen);
+
+      try {
+        const playedMove = await chessboardRef.current.move({
+          from: autoMove.from,
+          to: autoMove.to,
+        });
+
+        if (isCurrent) {
+          onAutoMoveEndRef.current?.(playedMove);
+        }
+      } finally {
+        if (isCurrent) {
+          isAnimatingMoveRef.current = false;
+        }
+      }
+    };
+
+    void runAutoMove();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [autoMove?.id, autoMove?.from, autoMove?.to, fen]);
 
   const getPieceColor = (piece) => {
     if (!piece) {
@@ -99,9 +156,23 @@ export default function ChessboardWithArrows({
     return `${from}${to}${isPromotion ? "q" : ""}`;
   };
 
-  const emitMove = (from, to) => {
+  const emitMove = async (from, to) => {
     if (!from || !to || from === to || !onMoveRef.current) {
       return;
+    }
+
+    if (animateMoves && chessboardRef.current?.move) {
+      isAnimatingMoveRef.current = true;
+      chessboardRef.current.resetBoard?.(fen);
+
+      try {
+        const playedMove = await chessboardRef.current.move({ from, to });
+        if (!playedMove) {
+          return;
+        }
+      } finally {
+        isAnimatingMoveRef.current = false;
+      }
     }
 
     onMoveRef.current(buildUciMove(from, to));
@@ -113,6 +184,10 @@ export default function ChessboardWithArrows({
   };
 
   const handleSquareTap = (square) => {
+    if (isAnimatingMoveRef.current) {
+      return;
+    }
+
     if (!square) {
       setSelected(null);
       return;
@@ -139,7 +214,7 @@ export default function ChessboardWithArrows({
       return;
     }
 
-    emitMove(selected, square);
+    void emitMove(selected, square);
     setSelected(null);
   };
 
@@ -236,8 +311,10 @@ export default function ChessboardWithArrows({
     >
       <View style={{ width: boardSize, height: boardSize }}>
         <Chessboard
+          ref={chessboardRef}
           fen={fen}
           boardSize={boardSize}
+          durations={mergedDurations}
           gestureEnabled={false}
           withLetters={withLetters}
           withNumbers={withNumbers}

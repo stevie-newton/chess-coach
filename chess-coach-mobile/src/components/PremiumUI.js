@@ -1,7 +1,9 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const brandMarkImage = require("../../assets/generated/chess-coach-brandmark.png");
 
 export const palette = {
   ink: "#FFFFFF",
@@ -86,10 +88,12 @@ export function AppShell({
 
 export function BrandMark({ label = "CC" }) {
   return (
-    <View style={styles.brandMark}>
-      <MaterialCommunityIcons name="chess-king" size={18} color={palette.gold} />
-      <Text style={styles.brandText}>{label}</Text>
-    </View>
+    <Image
+      accessibilityLabel={`${label} logo`}
+      resizeMode="contain"
+      source={brandMarkImage}
+      style={styles.brandMarkImage}
+    />
   );
 }
 
@@ -328,21 +332,9 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     marginTop: 9,
   },
-  brandMark: {
-    alignItems: "center",
-    backgroundColor: "rgba(36,40,50,0.86)",
-    borderColor: "rgba(255,255,255,0.14)",
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 7,
-    minHeight: 44,
-    paddingHorizontal: 11,
-  },
-  brandText: {
-    color: palette.ink,
-    fontSize: 13,
-    fontWeight: "900",
+  brandMarkImage: {
+    height: 44,
+    width: 88,
   },
   iconButton: {
     alignItems: "center",

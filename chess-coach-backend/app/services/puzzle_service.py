@@ -1,9 +1,11 @@
 import io
 import chess
 import chess.pgn
+import chess.engine
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.analysis import MoveAnalysis
 from app.models.puzzle import Puzzle
 
@@ -94,6 +96,62 @@ def validate_puzzle_attempt(fen: str, user_move: str, best_move: str):
             else "That move is legal, but it does not match the engine best move for this position."
         ),
     }
+
+
+def build_puzzle_solution_line(fen: str, solution: str, max_plies: int = 7):
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        return []
+
+    first_move = _parse_move(board, solution)
+    if not first_move:
+        return []
+
+    line = []
+
+    try:
+        engine = chess.engine.SimpleEngine.popen_uci(settings.STOCKFISH_PATH)
+    except Exception:
+        return []
+
+    try:
+        move = first_move
+
+        for index in range(max_plies):
+            if move not in board.legal_moves:
+                break
+
+            fen_before = board.fen()
+            color = "white" if board.turn == chess.WHITE else "black"
+            san = board.san(move)
+            board.push(move)
+
+            line.append({
+                "ply": index,
+                "uci": move.uci(),
+                "san": san,
+                "color": color,
+                "is_user_move": index % 2 == 0,
+                "fen_before": fen_before,
+                "fen_after": board.fen(),
+                "is_checkmate": board.is_checkmate(),
+            })
+
+            if board.is_game_over() or index == max_plies - 1:
+                break
+
+            result = engine.play(
+                board,
+                chess.engine.Limit(depth=settings.STOCKFISH_DEPTH)
+            )
+            move = result.move
+            if not move:
+                break
+    finally:
+        engine.quit()
+
+    return line
 
 
 def generate_puzzles_from_game(db: Session, user_id: int, game):

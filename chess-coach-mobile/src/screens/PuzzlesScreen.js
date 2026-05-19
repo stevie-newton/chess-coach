@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { api } from "../api/client";
 import ChessboardWithArrows from "../components/ChessboardWithArrows";
@@ -23,8 +23,12 @@ export default function PuzzlesScreen({ showBack = true }) {
   const [feedbackByPuzzle, setFeedbackByPuzzle] = useState({});
   const [hintsByPuzzle, setHintsByPuzzle] = useState({});
   const [failedAttemptsByPuzzle, setFailedAttemptsByPuzzle] = useState({});
+  const [lineByPuzzle, setLineByPuzzle] = useState({});
+  const [autoMoveByPuzzle, setAutoMoveByPuzzle] = useState({});
+  const [boardResetByPuzzle, setBoardResetByPuzzle] = useState({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(null);
+  const autoMoveTimersRef = useRef({});
 
   const moveToSquares = (move) => {
     const normalized = move?.trim().toLowerCase();
@@ -53,6 +57,133 @@ export default function PuzzlesScreen({ showBack = true }) {
   };
 
   const boardSize = Math.max(200, Math.min(300, (boardWrapWidth || width - 74) - 18));
+
+  useEffect(() => {
+    const timers = autoMoveTimersRef.current;
+
+    return () => {
+      Object.values(timers).forEach(clearTimeout);
+    };
+  }, []);
+
+  const normalizeMove = (move) => (move || "").trim().toLowerCase();
+
+  const queueAutoMove = (puzzleId, line, index) => {
+    const move = line[index];
+    if (!move) {
+      return;
+    }
+
+    clearTimeout(autoMoveTimersRef.current[puzzleId]);
+    autoMoveTimersRef.current[puzzleId] = setTimeout(() => {
+      setAutoMoveByPuzzle((current) => ({
+        ...current,
+        [puzzleId]: {
+          from: move.uci.slice(0, 2),
+          id: `${puzzleId}-${index}-${move.uci}`,
+          index,
+          to: move.uci.slice(2, 4),
+        },
+      }));
+    }, 550);
+  };
+
+  const advanceLine = (puzzleId, moveIndex) => {
+    setLineByPuzzle((current) => {
+      const state = current[puzzleId];
+      const move = state?.line?.[moveIndex];
+      if (!state || !move) {
+        return current;
+      }
+
+      const nextIndex = moveIndex + 1;
+      const nextMove = state.line[nextIndex];
+      const isComplete = !nextMove || move.is_checkmate;
+
+      if (nextMove && !nextMove.is_user_move) {
+        queueAutoMove(puzzleId, state.line, nextIndex);
+      }
+
+      return {
+        ...current,
+        [puzzleId]: {
+          ...state,
+          completed: isComplete,
+          currentFen: move.fen_after,
+          nextIndex,
+          status: isComplete
+            ? move.is_checkmate
+              ? "Checkmate."
+              : "Line complete."
+            : nextMove.is_user_move
+              ? `Your move: find ${nextMove.color === "white" ? "White" : "Black"}'s continuation.`
+              : `Opponent replies: ${nextMove.san}`,
+        },
+      };
+    });
+  };
+
+  const finishAutoMove = (puzzleId) => {
+    const autoMove = autoMoveByPuzzle[puzzleId];
+    if (!autoMove) {
+      return;
+    }
+
+    setAutoMoveByPuzzle((current) => {
+      const next = { ...current };
+      delete next[puzzleId];
+      return next;
+    });
+    advanceLine(puzzleId, autoMove.index);
+  };
+
+  const startSolutionLine = async (puzzle, attemptFeedback) => {
+    try {
+      const response = await api.get(`/puzzles/${puzzle.id}/line`);
+      const line = response.data?.line || [];
+      const firstMove = line[0];
+
+      if (!firstMove) {
+        return;
+      }
+
+      const nextMove = line[1];
+
+      setLineByPuzzle((current) => ({
+        ...current,
+        [puzzle.id]: {
+          completed: !nextMove || firstMove.is_checkmate,
+          currentFen: firstMove.fen_after,
+          line,
+          nextIndex: 1,
+          status: !nextMove || firstMove.is_checkmate
+            ? firstMove.is_checkmate
+              ? "Checkmate."
+              : "Line complete."
+            : nextMove.is_user_move
+              ? "Correct. Find the next move."
+              : `Correct. Opponent replies: ${nextMove.san}`,
+        },
+      }));
+
+      setMoves((current) => ({ ...current, [puzzle.id]: attemptFeedback.user_move }));
+
+      if (nextMove && !nextMove.is_user_move && !firstMove.is_checkmate) {
+        queueAutoMove(puzzle.id, line, 1);
+      }
+    } catch (_error) {
+      setLineByPuzzle((current) => ({
+        ...current,
+        [puzzle.id]: {
+          completed: true,
+          currentFen: puzzle.fen,
+          line: [],
+          nextIndex: 0,
+          status: "Correct. The coach could not load a continuation for this puzzle.",
+        },
+      }));
+    }
+  };
 
   const buildSolvedMoveFeedback = (puzzle) => {
     const feedback = feedbackByPuzzle[puzzle.id];
@@ -155,6 +286,35 @@ export default function PuzzlesScreen({ showBack = true }) {
     });
   };
 
+  const handleBoardMove = (puzzle, move) => {
+    const lineState = lineByPuzzle[puzzle.id];
+    const expectedMove = lineState?.line?.[lineState.nextIndex];
+
+    if (!expectedMove?.is_user_move || lineState.completed) {
+      stageMove(puzzle.id, move);
+      return;
+    }
+
+    if (normalizeMove(move) !== normalizeMove(expectedMove.uci)) {
+      setMoves((current) => ({ ...current, [puzzle.id]: move }));
+      setLineByPuzzle((current) => ({
+        ...current,
+        [puzzle.id]: {
+          ...lineState,
+          status: "That move is legal, but it is not the continuation. Try again from this position.",
+        },
+      }));
+      setBoardResetByPuzzle((current) => ({
+        ...current,
+        [puzzle.id]: (current[puzzle.id] || 0) + 1,
+      }));
+      return;
+    }
+
+    setMoves((current) => ({ ...current, [puzzle.id]: move }));
+    advanceLine(puzzle.id, lineState.nextIndex);
+  };
+
   const retryPuzzle = (puzzleId) => {
     setMoves((current) => {
       const next = { ...current };
@@ -224,6 +384,10 @@ export default function PuzzlesScreen({ showBack = true }) {
         ...current,
         [puzzle.id]: response.data,
       }));
+
+      if (isCorrect) {
+        await startSolutionLine(puzzle, response.data);
+      }
     } catch (error) {
       Alert.alert(
         "Attempt failed",
@@ -260,6 +424,10 @@ export default function PuzzlesScreen({ showBack = true }) {
           <SectionHeader label="Puzzle Queue" />
           {puzzles.map((puzzle) => {
             const { feedback, arrows, highlights, shouldRevealSolution } = buildSolvedMoveFeedback(puzzle);
+            const lineState = lineByPuzzle[puzzle.id];
+            const boardFen = lineState?.currentFen || puzzle.fen;
+            const isLineActive = Boolean(lineState?.line?.length) && !lineState.completed;
+            const expectedLineMove = lineState?.line?.[lineState.nextIndex];
 
             return (
               <PremiumPanel key={puzzle.id} style={styles.puzzleCard}>
@@ -304,18 +472,31 @@ export default function PuzzlesScreen({ showBack = true }) {
                         </Text>
                       </View>
                     ) : feedback.is_correct ? (
-                      <View style={styles.progressRow}>
-                        <StatPill icon="chart-line" value={feedback.puzzle_rating} label="rating" tone="sage" />
-                        <StatPill icon="fire" value={feedback.puzzle_streak} label="streak" tone="gold" />
-                        {feedback.spaced_repetition ? (
-                          <StatPill
-                            icon="calendar-sync"
-                            value={`${feedback.spaced_repetition.interval_days}d`}
-                            label="next review"
-                            tone="wine"
-                          />
+                      <>
+                        <View style={styles.progressRow}>
+                          <StatPill icon="chart-line" value={feedback.puzzle_rating} label="rating" tone="sage" />
+                          <StatPill icon="fire" value={feedback.puzzle_streak} label="streak" tone="gold" />
+                          {feedback.spaced_repetition ? (
+                            <StatPill
+                              icon="calendar-sync"
+                              value={`${feedback.spaced_repetition.interval_days}d`}
+                              label="next review"
+                              tone="wine"
+                            />
+                          ) : null}
+                        </View>
+                        {lineState ? (
+                          <View style={styles.linePanel}>
+                            <Text style={styles.lineLabel}>Continuation</Text>
+                            <Text style={styles.lineStatus}>{lineState.status}</Text>
+                            {expectedLineMove?.is_user_move && !lineState.completed ? (
+                              <Text style={styles.lineHint}>
+                                Tap the next move for {expectedLineMove.color === "white" ? "White" : "Black"}.
+                              </Text>
+                            ) : null}
+                          </View>
                         ) : null}
-                      </View>
+                      </>
                     ) : feedback.user_move ? (
                       <>
                         <View style={styles.progressRow}>
@@ -367,17 +548,20 @@ export default function PuzzlesScreen({ showBack = true }) {
                   onLayout={(event) => setBoardWrapWidth(event.nativeEvent.layout.width)}
                 >
                   <ChessboardWithArrows
-                    fen={puzzle.fen}
+                    fen={boardFen}
                     boardSize={boardSize}
                     withLetters={true}
                     withNumbers={true}
-                    onMove={(move) => stageMove(puzzle.id, move)}
-                    arrows={arrows}
-                    highlights={highlights}
+                    onMove={(move) => handleBoardMove(puzzle, move)}
+                    arrows={isLineActive ? [] : arrows}
+                    highlights={isLineActive ? [] : highlights}
+                    autoMove={autoMoveByPuzzle[puzzle.id]}
+                    onAutoMoveEnd={() => finishAutoMove(puzzle.id)}
+                    resetToken={boardResetByPuzzle[puzzle.id] || 0}
                   />
                 </View>
 
-                <Text style={styles.fenText} selectable>{puzzle.fen}</Text>
+                <Text style={styles.fenText} selectable>{boardFen}</Text>
 
                 <Text style={[styles.moveHint, feedback?.is_correct && styles.correctMoveHint]}>
                   {moves[puzzle.id]
@@ -391,7 +575,7 @@ export default function PuzzlesScreen({ showBack = true }) {
                   title={submitting === puzzle.id ? "Submitting..." : "Submit move"}
                   icon="send"
                   onPress={() => submitAttempt(puzzle)}
-                  disabled={submitting === puzzle.id}
+                  disabled={submitting === puzzle.id || isLineActive}
                 />
               </PremiumPanel>
             );
@@ -558,6 +742,32 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 19,
     marginTop: 7,
+  },
+  linePanel: {
+    backgroundColor: "rgba(215, 179, 90, 0.13)",
+    borderColor: "rgba(215, 179, 90, 0.35)",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 5,
+    padding: 10,
+  },
+  lineLabel: {
+    color: palette.gold,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  lineStatus: {
+    color: palette.ink,
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 19,
+  },
+  lineHint: {
+    color: palette.mutedDark,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
   },
   progressRow: {
     flexDirection: "row",

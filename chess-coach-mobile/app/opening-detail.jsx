@@ -120,6 +120,14 @@ function legalAttackArrows(fen, limit = 12) {
   }
 }
 
+function colorToTurn(color) {
+  return color?.toLowerCase() === "black" ? "b" : "w";
+}
+
+function turnForPly(plyIndex) {
+  return plyIndex % 2 === 0 ? "w" : "b";
+}
+
 function DetailList({ items, icon = "check-circle-outline" }) {
   return (
     <View style={styles.list}>
@@ -551,7 +559,12 @@ function InteractiveOpeningTrainer({ opening, openingName }) {
   const { width } = useWindowDimensions();
   const lineSans = useMemo(() => flattenMainLine(opening.mainLine), [opening.mainLine]);
   const [plyIndex, setPlyIndex] = useState(0);
-  const [feedback, setFeedback] = useState({ title: "Ready", body: "App is ready to play the first move.", tone: "neutral" });
+  const userTurn = colorToTurn(opening.color);
+  const [feedback, setFeedback] = useState({
+    title: "Ready",
+    body: userTurn === "w" ? "Your turn. Play the first move." : "App is ready to play the first move.",
+    tone: "neutral",
+  });
   const [lastMove, setLastMove] = useState(null);
   const [selectedMove, setSelectedMove] = useState("");
   const [attempts, setAttempts] = useState(0);
@@ -560,7 +573,7 @@ function InteractiveOpeningTrainer({ opening, openingName }) {
   const [mistakesByPly, setMistakesByPly] = useState({});
   const boardSize = Math.max(220, Math.min(300, width - 74));
   const isComplete = plyIndex >= lineSans.length;
-  const waitingForUser = !isComplete && plyIndex % 2 === 1;
+  const waitingForUser = !isComplete && turnForPly(plyIndex) === userTurn;
   const position = useMemo(() => createPositionFromSans(lineSans.slice(0, plyIndex)), [lineSans, plyIndex]);
   const expectedMove = useMemo(() => {
     if (!waitingForUser) {
@@ -623,7 +636,11 @@ function InteractiveOpeningTrainer({ opening, openingName }) {
 
   const resetTrainer = () => {
     setPlyIndex(0);
-    setFeedback({ title: "Ready", body: "App is ready to play the first move.", tone: "neutral" });
+    setFeedback({
+      title: "Ready",
+      body: userTurn === "w" ? "Your turn. Play the first move." : "App is ready to play the first move.",
+      tone: "neutral",
+    });
     setLastMove(null);
     setSelectedMove("");
     setAttempts(0);

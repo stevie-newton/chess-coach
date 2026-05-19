@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 
 
@@ -41,3 +41,19 @@ class PuzzleAttemptResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PuzzleLineMove(BaseModel):
+    ply: int
+    uci: str
+    san: str
+    color: str
+    is_user_move: bool
+    fen_before: str
+    fen_after: str
+    is_checkmate: bool = False
+
+
+class PuzzleLineResponse(BaseModel):
+    puzzle_id: int
+    line: List[PuzzleLineMove]
