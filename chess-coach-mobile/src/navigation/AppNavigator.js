@@ -1,9 +1,10 @@
 import React, { useContext } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { AuthContext } from "../context/AuthContext";
+import { LoadingState, palette } from "../components/PremiumUI";
 
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
@@ -19,8 +20,8 @@ export default function AppNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator size="large" />
+      <View style={{ backgroundColor: palette.ivory, flex: 1, justifyContent: "center" }}>
+        <LoadingState panel={false} />
       </View>
     );
   }

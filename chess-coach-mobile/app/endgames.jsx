@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { api } from "../src/api/client";
 import ChessboardWithArrows from "../src/components/ChessboardWithArrows";
 import {
   AppShell,
   EmptyState,
   FeatureRow,
+  LoadingState,
   PremiumPanel,
   PrimaryButton,
   SectionHeader,
@@ -131,9 +132,7 @@ export default function Endgames() {
       subtitle="Convert core positions with precision, efficiency, and clean technique."
     >
       {loading ? (
-        <PremiumPanel style={styles.loadingPanel}>
-          <ActivityIndicator size="large" color={palette.gold} />
-        </PremiumPanel>
+        <LoadingState />
       ) : templates.length === 0 ? (
         <EmptyState
           icon="chess-king"

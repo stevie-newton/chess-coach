@@ -1,11 +1,12 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { api } from "../src/api/client";
 import ChessboardWithArrows from "../src/components/ChessboardWithArrows";
 import {
   AppShell,
   EmptyState,
+  LoadingState,
   PremiumPanel,
   PrimaryButton,
   SecondaryButton,
@@ -144,8 +145,8 @@ export default function GameDetail() {
 
   if (loading) {
     return (
-      <AppShell scroll={false} contentStyle={styles.centerShell}>
-        <ActivityIndicator size="large" color={palette.gold} />
+      <AppShell scroll={false} showTopBar={false} contentStyle={styles.centerShell}>
+        <LoadingState panel={false} />
       </AppShell>
     );
   }

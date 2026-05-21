@@ -1,10 +1,11 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Share, StyleSheet, Text, View } from "react-native";
+import { Alert, Share, StyleSheet, Text, View } from "react-native";
 import { api } from "../api/client";
 import {
   AppShell,
   EmptyState,
+  LoadingState,
   PremiumPanel,
   PrimaryButton,
   SecondaryButton,
@@ -42,8 +43,8 @@ export default function ProfileScreen({ showBack = true }) {
 
   if (loading) {
     return (
-      <AppShell scroll={false} contentStyle={styles.centerShell}>
-        <ActivityIndicator size="large" color={palette.gold} />
+      <AppShell scroll={false} showTopBar={false} contentStyle={styles.centerShell}>
+        <LoadingState panel={false} />
       </AppShell>
     );
   }

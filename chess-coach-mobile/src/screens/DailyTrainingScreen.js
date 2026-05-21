@@ -1,11 +1,12 @@
 import { router } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, StyleSheet, Text, View } from "react-native";
 import { api } from "../api/client";
 import {
   AppShell,
   EmptyState,
+  LoadingState,
   PremiumPanel,
   PrimaryButton,
   SectionHeader,
@@ -101,9 +102,7 @@ export default function DailyTrainingScreen({ showBack = true }) {
       subtitle="Your session uses only your saved schedule, due reviews, puzzles, and weaknesses."
     >
       {loading ? (
-        <PremiumPanel style={styles.loadingPanel}>
-          <ActivityIndicator size="large" color={palette.gold} />
-        </PremiumPanel>
+        <LoadingState />
       ) : training ? (
         <>
           <View style={styles.statsRow}>

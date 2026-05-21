@@ -1,10 +1,11 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { api } from "../api/client";
 import {
   AppShell,
   EmptyState,
+  LoadingState,
   PremiumPanel,
   PrimaryButton,
   SecondaryButton,
@@ -135,9 +136,7 @@ export default function GamesScreen({ showBack = true }) {
       </PremiumPanel>
 
       {loading ? (
-        <PremiumPanel style={styles.loadingPanel}>
-          <ActivityIndicator size="large" color={palette.gold} />
-        </PremiumPanel>
+        <LoadingState />
       ) : games.length === 0 ? (
         <EmptyState
           icon="database-search"

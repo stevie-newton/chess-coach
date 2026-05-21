@@ -2,7 +2,6 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useCallback, useContext, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
@@ -14,6 +13,7 @@ import ChessboardWithArrows from "../components/ChessboardWithArrows";
 import {
   AppShell,
   EmptyState,
+  LoadingState,
   PremiumPanel,
   PrimaryButton,
   SecondaryButton,
@@ -133,12 +133,11 @@ export default function MistakeReplayScreen() {
 
   if (loading) {
     return (
-      <AppShell scroll={false} contentStyle={styles.centerShell}>
-        <PremiumPanel style={styles.loadingPanel}>
-          <ActivityIndicator size="large" color={palette.gold} />
-          <Text style={styles.loadingTitle}>Preparing the position</Text>
-          <Text style={styles.loadingText}>Loading your next mistake replay drill.</Text>
-        </PremiumPanel>
+      <AppShell scroll={false} showTopBar={false} contentStyle={styles.centerShell}>
+        <LoadingState
+          title="Preparing the position"
+          body="Loading your next mistake replay drill."
+        />
       </AppShell>
     );
   }

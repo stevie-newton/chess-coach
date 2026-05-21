@@ -1,11 +1,12 @@
 import { router } from "expo-router";
 import { useContext, useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { api } from "../api/client";
 import {
   AppShell,
   EmptyState,
   FeatureRow,
+  LoadingState,
   PremiumPanel,
   PrimaryButton,
   SectionHeader,
@@ -168,12 +169,11 @@ export default function DashboardScreen() {
 
   if (loading) {
     return (
-      <AppShell scroll={false} contentStyle={styles.centerShell}>
-        <PremiumPanel style={styles.loadingPanel}>
-          <ActivityIndicator size="large" color={palette.gold} />
-          <Text style={styles.loadingTitle}>Loading your dashboard</Text>
-          <Text style={styles.loadingText}>Pulling together your training snapshot.</Text>
-        </PremiumPanel>
+      <AppShell scroll={false} showTopBar={false} contentStyle={styles.centerShell}>
+        <LoadingState
+          title="Loading your dashboard"
+          body="Pulling together your training snapshot."
+        />
       </AppShell>
     );
   }

@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const brandMarkImage = require("../../assets/generated/chess-coach-brandmark.png");
@@ -37,6 +37,7 @@ export function AppShell({
   subtitle,
   action,
   showBack = false,
+  showTopBar = true,
   scroll = true,
   contentStyle,
 }) {
@@ -62,14 +63,16 @@ export function AppShell({
         style={styles.keyboardAvoider}
       >
         <Container {...containerProps}>
-          <View style={styles.topBar}>
-            {showBack ? (
-              <IconButton icon="arrow-left" onPress={() => router.back()} />
-            ) : (
-              <BrandMark />
-            )}
-            {action}
-          </View>
+          {showTopBar ? (
+            <View style={styles.topBar}>
+              {showBack ? (
+                <IconButton icon="arrow-left" onPress={() => router.back()} />
+              ) : (
+                <BrandMark transparent />
+              )}
+              {action}
+            </View>
+          ) : null}
 
           {(eyebrow || title || subtitle) && (
             <View style={styles.header}>
@@ -86,13 +89,32 @@ export function AppShell({
   );
 }
 
-export function BrandMark({ label = "CC" }) {
+export function BrandMark({ label = "CC", size = "compact", transparent = false, style }) {
+  const markSize = size === "hero" ? styles.brandMarkHero : styles.brandMarkImage;
+
+  if (transparent) {
+    const isHero = size === "hero";
+    const iconSize = isHero ? 42 : 30;
+    const textStyle = isHero ? styles.brandTextHero : styles.brandText;
+
+    return (
+      <View
+        accessibilityLabel={`${label} logo`}
+        accessible
+        style={[styles.transparentBrandMark, size === "hero" && styles.transparentBrandMarkHero, style]}
+      >
+        <MaterialCommunityIcons name="chess-king" size={iconSize} color={palette.gold} />
+        <Text style={textStyle}>{label}</Text>
+      </View>
+    );
+  }
+
   return (
     <Image
       accessibilityLabel={`${label} logo`}
       resizeMode="contain"
       source={brandMarkImage}
-      style={styles.brandMarkImage}
+      style={[markSize, style]}
     />
   );
 }
@@ -259,6 +281,23 @@ export function EmptyState({ icon, title, body, actionTitle, onAction }) {
   );
 }
 
+export function LoadingState({ title, body, panel = true }) {
+  const content = (
+    <>
+      <BrandMark transparent />
+      <ActivityIndicator size="large" color={palette.gold} />
+      {title ? <Text style={styles.loadingTitle}>{title}</Text> : null}
+      {body ? <Text style={styles.loadingBody}>{body}</Text> : null}
+    </>
+  );
+
+  if (!panel) {
+    return <View style={styles.loadingState}>{content}</View>;
+  }
+
+  return <PremiumPanel style={styles.loadingState}>{content}</PremiumPanel>;
+}
+
 export const uiStyles = StyleSheet.create({
   input: {
     backgroundColor: palette.paper,
@@ -335,6 +374,32 @@ const styles = StyleSheet.create({
   brandMarkImage: {
     height: 44,
     width: 88,
+  },
+  brandMarkHero: {
+    height: 96,
+    width: 192,
+  },
+  transparentBrandMark: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 11,
+    minHeight: 52,
+  },
+  transparentBrandMarkHero: {
+    gap: 14,
+    minHeight: 96,
+  },
+  brandText: {
+    color: palette.ink,
+    fontSize: 34,
+    fontWeight: "900",
+    lineHeight: 40,
+  },
+  brandTextHero: {
+    color: palette.ink,
+    fontSize: 48,
+    fontWeight: "900",
+    lineHeight: 56,
   },
   iconButton: {
     alignItems: "center",
@@ -553,6 +618,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     maxWidth: 290,
+    textAlign: "center",
+  },
+  loadingState: {
+    alignItems: "center",
+    gap: 10,
+  },
+  loadingTitle: {
+    color: palette.ink,
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  loadingBody: {
+    color: palette.muted,
+    fontSize: 14,
+    lineHeight: 20,
+    maxWidth: 280,
     textAlign: "center",
   },
 });

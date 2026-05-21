@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { useContext, useEffect } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
-import { BrandMark, palette } from "../src/components/PremiumUI";
+import { View } from "react-native";
+import { LoadingState, palette } from "../src/components/PremiumUI";
 import { AuthContext } from "../src/context/AuthContext";
 
 export default function Index() {
@@ -24,11 +24,7 @@ export default function Index() {
         padding: 24,
       }}
     >
-      <BrandMark />
-      <ActivityIndicator size="large" color={palette.gold} />
-      <Text style={{ color: palette.muted, fontSize: 15, fontWeight: "800" }}>
-        Loading Chess Coach...
-      </Text>
+      <LoadingState title="Loading Chess Coach..." panel={false} />
     </View>
   );
 }

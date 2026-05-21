@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Alert, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { api } from "../api/client";
 import ChessboardWithArrows from "../components/ChessboardWithArrows";
 import {
   AppShell,
   EmptyState,
+  LoadingState,
   PremiumPanel,
   PrimaryButton,
   SectionHeader,
@@ -410,9 +411,7 @@ export default function PuzzlesScreen({ showBack = true }) {
       </View>
 
       {loading ? (
-        <PremiumPanel style={styles.loadingPanel}>
-          <ActivityIndicator size="large" color={palette.gold} />
-        </PremiumPanel>
+        <LoadingState />
       ) : puzzles.length === 0 ? (
         <EmptyState
           icon="puzzle-outline"

@@ -1,9 +1,10 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { api } from "../api/client";
 import {
   AppShell,
+  LoadingState,
   PremiumPanel,
   PrimaryButton,
   SecondaryButton,
@@ -127,9 +128,7 @@ export default function ImportGamesScreen() {
       subtitle="Save public Chess.com and Lichess usernames, then import games into your coach library."
     >
       {loading ? (
-        <PremiumPanel style={styles.loadingPanel}>
-          <ActivityIndicator size="large" color={palette.gold} />
-        </PremiumPanel>
+        <LoadingState />
       ) : (
         <>
           <View style={styles.providerGrid}>

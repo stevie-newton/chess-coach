@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { Chess } from "chess.js";
 import { api } from "../src/api/client";
 import OpeningBoard from "../src/components/OpeningBoard";
 import {
   AppShell,
   EmptyState,
+  LoadingState,
   PremiumPanel,
   SectionHeader,
   StatPill,
@@ -118,9 +119,7 @@ export default function OpeningPractice() {
       subtitle="Answer from memory: what is the best move in this opening position?"
     >
       {loading ? (
-        <PremiumPanel style={styles.loadingPanel}>
-          <ActivityIndicator size="large" color={palette.gold} />
-        </PremiumPanel>
+        <LoadingState />
       ) : !opening ? (
         <EmptyState
           icon="bookshelf"

@@ -46,9 +46,9 @@ export default function RegisterScreen() {
   };
 
   return (
-    <AppShell contentStyle={styles.container}>
+    <AppShell contentStyle={styles.container} showTopBar={false}>
       <View style={styles.hero}>
-        <BrandMark />
+        <BrandMark size="hero" transparent />
       </View>
 
       <PremiumPanel style={styles.formPanel}>

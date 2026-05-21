@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { api } from "../src/api/client";
 import ChessboardWithArrows from "../src/components/ChessboardWithArrows";
 import {
   AppShell,
   EmptyState,
   FeatureRow,
+  LoadingState,
   PremiumPanel,
   PrimaryButton,
   SectionHeader,
@@ -134,9 +135,7 @@ export default function CalculationTraining() {
       subtitle="Study the position briefly, then calculate after the board disappears."
     >
       {loading ? (
-        <PremiumPanel style={styles.loadingPanel}>
-          <ActivityIndicator size="large" color={palette.gold} />
-        </PremiumPanel>
+        <LoadingState />
       ) : drills.length === 0 ? (
         <EmptyState
           icon="brain"

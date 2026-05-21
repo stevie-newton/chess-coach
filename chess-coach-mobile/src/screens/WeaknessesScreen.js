@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { api } from "../api/client";
 import {
   AppShell,
   EmptyState,
+  LoadingState,
   PremiumPanel,
   SectionHeader,
   StatPill,
@@ -46,9 +47,7 @@ export default function WeaknessesScreen({ showBack = true }) {
       </View>
 
       {loading ? (
-        <PremiumPanel style={styles.loadingPanel}>
-          <ActivityIndicator size="large" color={palette.gold} />
-        </PremiumPanel>
+        <LoadingState />
       ) : weaknesses.length === 0 ? (
         <EmptyState
           icon="shield-check"
