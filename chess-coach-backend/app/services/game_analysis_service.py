@@ -2,7 +2,9 @@ from sqlalchemy.orm import Session
 
 from app.models.game import Game
 from app.models.analysis import GameAnalysis, MoveAnalysis
+from app.models.user import User
 
+from app.services.move_coaching_service import premium_move_explanation
 from app.services.stockfish_service import analyze_pgn
 from app.services.weakness_service import (
     detect_weakness_category,
@@ -34,6 +36,7 @@ def analyze_game_and_save(
         db.delete(existing_analysis)
         db.commit()
 
+    user = db.query(User).filter(User.id == user_id).first()
     result = analyze_pgn(game.pgn)
 
     analysis = GameAnalysis(
@@ -50,6 +53,11 @@ def analyze_game_and_save(
     db.refresh(analysis)
 
     for move in result["moves"]:
+        explanation = premium_move_explanation(
+            move=move,
+            coach_personality=user.coach_personality if user else None
+        )
+
         move_analysis = MoveAnalysis(
             game_id=game.id,
             move_number=move["move_number"],
@@ -61,7 +69,7 @@ def analyze_game_and_save(
             evaluation_before=move["evaluation_before"],
             evaluation_after=move["evaluation_after"],
             mistake_type=move["mistake_type"],
-            explanation=move["explanation"]
+            explanation=explanation
         )
 
         db.add(move_analysis)
@@ -69,7 +77,7 @@ def analyze_game_and_save(
         category = detect_weakness_category(
             move_number=move["move_number"],
             mistake_type=move["mistake_type"],
-            explanation=move["explanation"]
+            explanation=explanation
         )
 
         if category:

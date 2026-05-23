@@ -10,9 +10,12 @@ class MoveAnalysisResponse(BaseModel):
     played_move: str
     played_move_uci: Optional[str]
     best_move: Optional[str]
+    best_move_san: Optional[str] = None
     evaluation_before: Optional[float]
     evaluation_after: Optional[float]
     mistake_type: Optional[str]
+    tactical_miss: bool = False
+    tactical_miss_reason: Optional[str] = None
     explanation: Optional[str]
 
     class Config:

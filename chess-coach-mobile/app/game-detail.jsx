@@ -20,6 +20,7 @@ const badMoveTypes = ["inaccuracy", "mistake", "blunder"];
 export default function GameDetail() {
   const { id } = useLocalSearchParams();
   const [game, setGame] = useState(null);
+  const [analysis, setAnalysis] = useState(null);
   const [positions, setPositions] = useState([]);
   const [mistakes, setMistakes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +37,15 @@ export default function GameDetail() {
       try {
         const gameResponse = await api.get(`/games/${id}`);
         setGame(gameResponse.data);
+
+        try {
+          const analysisResponse = await api.get(`/analysis/${id}`);
+          setAnalysis(analysisResponse.data);
+        } catch (error) {
+          if (error.response?.status !== 404) {
+            console.log(error.response?.data || error.message);
+          }
+        }
 
         try {
           const positionsResponse = await api.get(`/board/game/${id}/positions`);
@@ -85,6 +95,11 @@ export default function GameDetail() {
 
   const analyzedCount = positions.length;
   const mistakeCount = mistakes.length || positions.filter((position) => badMoveTypes.includes(position.mistake_type)).length;
+  const blunderCount = analysis?.blunders ?? positions.filter((position) => position.mistake_type === "blunder").length;
+  const mistakeOnlyCount = analysis?.mistakes ?? positions.filter((position) => position.mistake_type === "mistake").length;
+  const accuracy = analysis?.accuracy ?? (positions.length > 0 ? Math.round(((positions.length - mistakeCount) / positions.length) * 100) : null);
+  const bestMovesFound = analysis?.best_moves_found ?? positions.filter((position) => position.mistake_type === "good").length;
+  const tacticalMisses = positions.filter((position) => position.tactical_miss);
   const replayPosition = positions[replayIndex] || mistakes[0] || positions.find((position) => position.fen_before) || null;
 
   const moveToArrow = (uci, color) => {
@@ -171,18 +186,37 @@ export default function GameDetail() {
       subtitle="Opponent, result, PGN, analyzed positions, mistakes, and a board replay preview."
     >
       <View style={styles.statsRow}>
-        <StatPill icon="chess-knight" value={game.result || "-"} label="result" tone="gold" />
-        <StatPill icon="map-marker-path" value={analyzedCount} label="positions" />
-        <StatPill icon="alert-octagon" value={mistakeCount} label="mistakes" tone="wine" />
+        <StatPill icon="target" value={accuracy !== null ? `${accuracy}%` : "-"} label="accuracy" tone="gold" />
+        <StatPill icon="alert-octagon" value={blunderCount} label="blunders" tone="wine" />
+        <StatPill icon="alert-circle" value={mistakeOnlyCount} label="mistakes" tone="sage" />
+        <StatPill icon="star-check" value={bestMovesFound} label="best moves" tone="gold" />
       </View>
 
       <PremiumPanel dark style={styles.summaryPanel}>
-        <Text style={styles.panelLabel}>Game summary</Text>
-        <Text style={styles.summaryLine}>Opponent: {game.opponent || "Unknown opponent"}</Text>
-        <Text style={styles.summaryLine}>Result: {game.result || "No result"}</Text>
-        <Text style={styles.summaryLine}>Color: {game.color_played || "Unknown"}</Text>
-        <Text style={styles.summaryLine}>Source: {game.source || "Manual"}</Text>
-        <Text style={styles.summaryLine}>Time control: {game.time_control || "Unknown"}</Text>
+        <Text style={styles.panelLabel}>Post-game report</Text>
+        <View style={styles.reportGrid}>
+          <View style={styles.reportTile}>
+            <Text style={styles.reportValue}>{accuracy !== null ? `${accuracy}%` : "-"}</Text>
+            <Text style={styles.reportLabel}>Accuracy</Text>
+          </View>
+          <View style={styles.reportTile}>
+            <Text style={styles.reportValue}>{blunderCount}</Text>
+            <Text style={styles.reportLabel}>Blunders</Text>
+          </View>
+          <View style={styles.reportTile}>
+            <Text style={styles.reportValue}>{mistakeOnlyCount}</Text>
+            <Text style={styles.reportLabel}>Mistakes</Text>
+          </View>
+          <View style={styles.reportTile}>
+            <Text style={styles.reportValue}>{bestMovesFound}</Text>
+            <Text style={styles.reportLabel}>Best Moves</Text>
+          </View>
+        </View>
+        <Text style={styles.summaryLine}>
+          {analyzedCount > 0
+            ? `${analyzedCount} analyzed moves, ${mistakeCount} review targets, ${tacticalMisses.length} tactical misses.`
+            : "Analyze this game to unlock the move-by-move review."}
+        </Text>
       </PremiumPanel>
 
       <SectionHeader label="Board Replay" action="Preview" />
@@ -283,10 +317,10 @@ export default function GameDetail() {
         />
       )}
 
-      <SectionHeader label="Mistakes" />
+      <SectionHeader label="Explain Mistakes" />
       {mistakes.length > 0 ? (
         mistakes.map((mistake) => (
-          <PremiumPanel key={mistake.move_id} style={styles.itemCard}>
+          <PremiumPanel key={mistake.move_id} style={[styles.itemCard, mistake.tactical_miss && styles.tacticalCard]}>
             <View style={styles.itemTop}>
               <Text style={styles.itemTitle}>
                 Move {mistake.move_number} {mistake.color}
@@ -294,7 +328,10 @@ export default function GameDetail() {
               <Text style={styles.badge}>{mistake.mistake_type}</Text>
             </View>
             <Text style={styles.mutedText}>Played: {mistake.played_move || "Unknown"}</Text>
-            <Text style={styles.mutedText}>Best: {mistake.best_move || "Unknown"}</Text>
+            <Text style={styles.bestMoveText}>Best move: {mistake.best_move_san || mistake.best_move || "Unknown"}</Text>
+            {mistake.tactical_miss_reason ? (
+              <Text style={styles.tacticalText}>{mistake.tactical_miss_reason}</Text>
+            ) : null}
             <Text style={styles.explanation}>{mistake.explanation || "No explanation yet."}</Text>
             <SecondaryButton
               title="Show on board"
@@ -312,10 +349,39 @@ export default function GameDetail() {
         />
       )}
 
-      <SectionHeader label="Analysis Positions" />
+      <SectionHeader label="Tactical Misses" />
+      {tacticalMisses.length > 0 ? (
+        tacticalMisses.map((position) => (
+          <PremiumPanel key={`tactical-${position.move_id}`} style={[styles.itemCard, styles.tacticalCard]}>
+            <View style={styles.itemTop}>
+              <Text style={styles.itemTitle}>
+                Move {position.move_number} {position.color}
+              </Text>
+              <Text style={styles.badge}>{position.mistake_type}</Text>
+            </View>
+            <Text style={styles.mutedText}>Played: {position.played_move || "Unknown"}</Text>
+            <Text style={styles.bestMoveText}>Best move: {position.best_move_san || position.best_move || "Unknown"}</Text>
+            <Text style={styles.tacticalText}>{position.tactical_miss_reason}</Text>
+            <SecondaryButton
+              title="Review tactic"
+              icon="crosshairs-gps"
+              style={styles.inlineButton}
+              onPress={() => jumpToPosition(position.move_id)}
+            />
+          </PremiumPanel>
+        ))
+      ) : (
+        <EmptyState
+          icon="shield-check"
+          title="No tactical misses found"
+          body="After analysis, forcing checks, captures, and critical resources will appear here."
+        />
+      )}
+
+      <SectionHeader label="Move-By-Move Review" />
       {positions.length > 0 ? (
-        positions.slice(0, 20).map((position) => (
-          <PremiumPanel key={position.move_id} style={styles.itemCard}>
+        positions.map((position) => (
+          <PremiumPanel key={position.move_id} style={[styles.itemCard, position.tactical_miss && styles.tacticalCard]}>
             <View style={styles.itemTop}>
               <Text style={styles.itemTitle}>
                 Move {position.move_number} {position.color}
@@ -323,8 +389,11 @@ export default function GameDetail() {
               <Text style={styles.badge}>{position.mistake_type || "good"}</Text>
             </View>
             <Text style={styles.mutedText}>Played: {position.played_move || "Unknown"}</Text>
-            <Text style={styles.mutedText}>UCI: {position.played_move_uci || "Unknown"}</Text>
-            <Text style={styles.mutedText}>Best: {position.best_move || "Unknown"}</Text>
+            <Text style={styles.bestMoveText}>Best move: {position.best_move_san || position.best_move || "Unknown"}</Text>
+            {position.tactical_miss_reason ? (
+              <Text style={styles.tacticalText}>{position.tactical_miss_reason}</Text>
+            ) : null}
+            <Text style={styles.explanation}>{position.explanation || "No explanation yet."}</Text>
             <Text style={styles.mutedText}>
               Eval: {position.evaluation_before ?? "-"} to {position.evaluation_after ?? "-"}
             </Text>
@@ -364,7 +433,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   summaryPanel: {
-    gap: 7,
+    gap: 12,
     marginBottom: 18,
   },
   panelLabel: {
@@ -377,6 +446,34 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontSize: 14,
     lineHeight: 21,
+  },
+  reportGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  reportTile: {
+    backgroundColor: "rgba(15,17,21,0.58)",
+    borderColor: "rgba(255,255,255,0.12)",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexGrow: 1,
+    minHeight: 78,
+    minWidth: 130,
+    padding: 12,
+  },
+  reportValue: {
+    color: palette.gold,
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 29,
+  },
+  reportLabel: {
+    color: palette.mutedDark,
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 4,
+    textTransform: "uppercase",
   },
   boardPanel: {
     gap: 12,
@@ -437,6 +534,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
   },
+  bestMoveText: {
+    color: palette.gold,
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 20,
+  },
+  tacticalText: {
+    color: palette.mutedDark,
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 20,
+  },
   replayControls: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -469,6 +578,9 @@ const styles = StyleSheet.create({
   itemCard: {
     gap: 7,
     marginBottom: 10,
+  },
+  tacticalCard: {
+    borderColor: "rgba(215,179,90,0.58)",
   },
   itemTop: {
     alignItems: "center",

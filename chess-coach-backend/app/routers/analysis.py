@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+import chess
 
 from app.core.database import get_db
 from app.core.auth_dependency import get_current_user
@@ -13,6 +14,58 @@ router = APIRouter(
     prefix="/analysis",
     tags=["Analysis"]
 )
+
+
+def best_move_san(fen: str | None, best_move: str | None):
+    if not fen or not best_move:
+        return None
+
+    try:
+        board = chess.Board(fen)
+        move = chess.Move.from_uci(best_move)
+        if move not in board.legal_moves:
+            return None
+        return board.san(move)
+    except ValueError:
+        return None
+
+
+def tactical_miss_reason(mistake_type: str | None, best_move_san_value: str | None):
+    if mistake_type not in ["inaccuracy", "mistake", "blunder"] or not best_move_san_value:
+        return None
+
+    if "#" in best_move_san_value:
+        return f"Tactical miss: Stockfish found mate with {best_move_san_value}."
+
+    if "+" in best_move_san_value:
+        return f"Tactical miss: {best_move_san_value} was a forcing check."
+
+    if "x" in best_move_san_value:
+        return f"Tactical miss: {best_move_san_value} won material."
+
+    return f"Tactical miss: {best_move_san_value} was the critical resource."
+
+
+def serialize_move_analysis(move: MoveAnalysis):
+    best_san = best_move_san(move.fen_before, move.best_move)
+    tactical_reason = tactical_miss_reason(move.mistake_type, best_san)
+
+    return {
+        "id": move.id,
+        "move_number": move.move_number,
+        "color": move.color,
+        "fen_before": move.fen_before,
+        "played_move": move.played_move,
+        "played_move_uci": move.played_move_uci,
+        "best_move": move.best_move,
+        "best_move_san": best_san,
+        "evaluation_before": move.evaluation_before,
+        "evaluation_after": move.evaluation_after,
+        "mistake_type": move.mistake_type,
+        "tactical_miss": tactical_reason is not None,
+        "tactical_miss_reason": tactical_reason,
+        "explanation": move.explanation,
+    }
 
 
 @router.post("/{game_id}")
@@ -95,5 +148,5 @@ def get_analysis(
         "mistakes": analysis.mistakes,
         "blunders": analysis.blunders,
         "best_moves_found": analysis.best_moves_found,
-        "moves": moves
+        "moves": [serialize_move_analysis(move) for move in moves]
     }
