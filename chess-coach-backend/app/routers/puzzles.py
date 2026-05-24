@@ -11,7 +11,12 @@ from app.models.puzzle import Puzzle, PuzzleAttempt
 from app.schemas.puzzle import PuzzleResponse, PuzzleAttemptCreate, PuzzleAttemptResponse, PuzzleLineResponse
 from app.services.explanation_engine_service import explain_puzzle_attempt
 from app.services.progression_service import award_xp
-from app.services.puzzle_service import build_puzzle_solution_line, generate_puzzles_from_game, validate_puzzle_attempt
+from app.services.puzzle_service import (
+    build_puzzle_solution_line,
+    generate_puzzles_from_game,
+    get_personalized_puzzle_queue,
+    validate_puzzle_attempt,
+)
 from app.services.spaced_repetition_service import update_review_state
 
 
@@ -59,6 +64,19 @@ def get_my_puzzles(
         .order_by(Puzzle.created_at.desc())
         .all()
     )
+
+
+@router.get("/personalized-training")
+def get_personalized_training(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    queue = get_personalized_puzzle_queue(
+        db=db,
+        user_id=current_user.id,
+    )
+
+    return queue
 
 
 @router.get("/{puzzle_id}", response_model=PuzzleResponse)

@@ -61,13 +61,15 @@ export default function GamesScreen({ showBack = true }) {
     try {
       setGameAction(gameId, "analysis");
       const response = await api.post(`/analysis/${gameId}`);
+      const focusMessage = response.data.personalized_training_focus?.message;
+      const generatedPuzzles = response.data.generated_puzzles ?? 0;
       Alert.alert(
         "Analysis complete",
-        `Accuracy: ${response.data.accuracy}%\nMistakes: ${response.data.mistakes}\nBlunders: ${response.data.blunders}`,
+        `Accuracy: ${response.data.accuracy}%\nMistakes: ${response.data.mistakes}\nBlunders: ${response.data.blunders}\nBest Moves: ${response.data.best_moves_found}\nGenerated puzzles: ${generatedPuzzles}${focusMessage ? `\n${focusMessage}` : ""}`,
         [
           { text: "Stay here", style: "cancel" },
+          { text: "Train tactics", onPress: () => router.push("/(tabs)/puzzles") },
           { text: "Dashboard", onPress: () => router.push("/(tabs)/dashboard") },
-          { text: "Weaknesses", onPress: () => router.push("/weaknesses") },
         ]
       );
     } catch (error) {

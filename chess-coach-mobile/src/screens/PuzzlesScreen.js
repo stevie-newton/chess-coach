@@ -20,6 +20,7 @@ export default function PuzzlesScreen({ showBack = true }) {
   const { width } = useWindowDimensions();
   const [boardWrapWidth, setBoardWrapWidth] = useState(0);
   const [puzzles, setPuzzles] = useState([]);
+  const [trainingFocus, setTrainingFocus] = useState(null);
   const [moves, setMoves] = useState({});
   const [feedbackByPuzzle, setFeedbackByPuzzle] = useState({});
   const [hintsByPuzzle, setHintsByPuzzle] = useState({});
@@ -341,8 +342,18 @@ export default function PuzzlesScreen({ showBack = true }) {
   useEffect(() => {
     async function loadPuzzles() {
       try {
-        const response = await api.get("/puzzles/");
-        setPuzzles(response.data || []);
+        try {
+          const response = await api.get("/puzzles/personalized-training");
+          setTrainingFocus(response.data?.focus || null);
+          setPuzzles(response.data?.puzzles || []);
+        } catch (personalizedError) {
+          if (personalizedError.response?.status !== 404) {
+            console.log(personalizedError.response?.data || personalizedError.message);
+          }
+
+          const response = await api.get("/puzzles/");
+          setPuzzles(response.data || []);
+        }
       } catch (error) {
         console.log(error.response?.data || error.message);
       } finally {
@@ -420,6 +431,16 @@ export default function PuzzlesScreen({ showBack = true }) {
         />
       ) : (
         <>
+          {trainingFocus ? (
+            <PremiumPanel dark style={styles.focusPanel}>
+              <Text style={styles.focusEyebrow}>Personalized tactical training</Text>
+              <Text style={styles.focusTitle}>{trainingFocus.message}</Text>
+              <Text style={styles.focusText}>
+                The queue is prioritized around this pattern using mistakes from your analyzed games.
+              </Text>
+            </PremiumPanel>
+          ) : null}
+
           <SectionHeader label="Puzzle Queue" />
           {puzzles.map((puzzle) => {
             const { feedback, arrows, highlights, shouldRevealSolution } = buildSolvedMoveFeedback(puzzle);
@@ -598,6 +619,27 @@ const styles = StyleSheet.create({
   puzzleCard: {
     gap: 12,
     marginBottom: 12,
+  },
+  focusPanel: {
+    gap: 7,
+    marginBottom: 14,
+  },
+  focusEyebrow: {
+    color: palette.gold,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  focusTitle: {
+    color: palette.ink,
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: 25,
+  },
+  focusText: {
+    color: palette.mutedDark,
+    fontSize: 14,
+    lineHeight: 20,
   },
   cardTop: {
     alignItems: "center",

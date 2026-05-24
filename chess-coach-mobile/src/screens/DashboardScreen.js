@@ -58,6 +58,65 @@ function CountBar({ label, value, max, color = palette.sage }) {
   );
 }
 
+function ProgressStatusRow({ label, status, score, detail }) {
+  const statusColor = status === "Strong" ? "#1E8E54" : status === "Weak" ? palette.danger : palette.gold;
+
+  return (
+    <View style={styles.statusRow}>
+      <View style={styles.statusCopy}>
+        <Text style={styles.statusLabel}>{label}</Text>
+        {detail ? <Text style={styles.statusDetail}>{detail}</Text> : null}
+      </View>
+      <View style={[styles.statusBadge, { borderColor: statusColor }]}>
+        <Text style={[styles.statusText, { color: statusColor }]}>{status}</Text>
+        {typeof score === "number" ? <Text style={styles.statusScore}>{Math.round(score)}%</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+function YourProgress({ summary }) {
+  const progress = summary.progress || {};
+  const puzzles = summary.puzzles || {};
+  const games = summary.games || {};
+  const openings = summary.openings || {};
+  const streaks = progress.streaks || {};
+
+  return (
+    <>
+      <SectionHeader label="Your Progress" />
+      <PremiumPanel dark style={styles.progressPanel}>
+        <ProgressStatusRow
+          label="Tactics"
+          status={progress.tactics?.label || "Improving"}
+          score={progress.tactics?.score}
+          detail={progress.tactics?.detail}
+        />
+        <ProgressStatusRow
+          label="Endgames"
+          status={progress.endgames?.label || "Weak"}
+          score={progress.endgames?.score}
+          detail={progress.endgames?.detail}
+        />
+        <ProgressStatusRow
+          label="Openings"
+          status={progress.openings?.label || "Improving"}
+          score={progress.openings?.score}
+          detail={progress.openings?.detail}
+        />
+      </PremiumPanel>
+
+      <View style={styles.statsRow}>
+        <StatPill icon="chart-line" value={puzzles.rating ?? 1200} label="puzzle rating" tone="gold" />
+        <StatPill icon="bookshelf" value={`${openings.mastery ?? 0}%`} label="opening mastery" tone="sage" />
+        <StatPill icon="target" value={`${games.average_accuracy ?? 0}%`} label="accuracy" tone="wine" />
+        <StatPill icon="fire" value={streaks.training ?? 0} label="training streak" />
+        <StatPill icon="puzzle-star" value={streaks.puzzles ?? 0} label="puzzle streak" tone="gold" />
+      </View>
+    </>
+  );
+}
+
 function AnalyticsGraphs({ summary }) {
   const games = summary.games || {};
   const training = summary.training || {};
@@ -201,6 +260,7 @@ export default function DashboardScreen() {
             </Text>
           </PremiumPanel>
 
+          <YourProgress summary={summary} />
           <AnalyticsGraphs summary={summary} />
         </>
       ) : (
@@ -270,6 +330,55 @@ const styles = StyleSheet.create({
   profileText: {
     color: palette.mutedDark,
     fontSize: 14,
+  },
+  progressPanel: {
+    gap: 11,
+    marginBottom: 14,
+  },
+  statusRow: {
+    alignItems: "center",
+    backgroundColor: "rgba(15,17,21,0.54)",
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+    minHeight: 72,
+    padding: 12,
+  },
+  statusCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  statusLabel: {
+    color: palette.ink,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  statusDetail: {
+    color: palette.mutedDark,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+  },
+  statusBadge: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 96,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  statusScore: {
+    color: palette.muted,
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 2,
   },
   analyticsPanel: {
     gap: 14,

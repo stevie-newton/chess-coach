@@ -292,6 +292,7 @@ export default function GameSession() {
   const [savedGame, setSavedGame] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [puzzleCount, setPuzzleCount] = useState(null);
+  const [trainingFocus, setTrainingFocus] = useState(null);
   const [coachFeedback, setCoachFeedback] = useState("");
   const [busyAction, setBusyAction] = useState(null);
   const [clock, setClock] = useState(() => {
@@ -355,6 +356,7 @@ export default function GameSession() {
     setSavedGame(null);
     setAnalysis(null);
     setPuzzleCount(null);
+    setTrainingFocus(null);
     if (options.source !== "ai") {
       setCoachFeedback("");
     }
@@ -444,6 +446,7 @@ export default function GameSession() {
     setSavedGame(null);
     setAnalysis(null);
     setPuzzleCount(null);
+    setTrainingFocus(null);
     setCoachFeedback("");
     setResult("*");
     setClock({ w: baseSeconds, b: baseSeconds });
@@ -509,6 +512,10 @@ export default function GameSession() {
       setBusyAction("analysis");
       const response = await api.post(`/analysis/${gameToAnalyze.id}`);
       setAnalysis(response.data);
+      setTrainingFocus(response.data.personalized_training_focus || null);
+      if (typeof response.data.generated_puzzles === "number") {
+        setPuzzleCount(response.data.generated_puzzles);
+      }
       return response.data;
     } catch (error) {
       Alert.alert("Analysis failed", error.response?.data?.detail || "Could not analyze this game.");
@@ -530,7 +537,8 @@ export default function GameSession() {
         api.get("/coach/feedback"),
       ]);
 
-      setPuzzleCount(puzzlesResponse.data?.length || 0);
+      const generatedCount = puzzlesResponse.data?.length || 0;
+      setPuzzleCount((current) => generatedCount || current || 0);
       setCoachFeedback(feedbackResponse.data?.message || feedbackResponse.data?.feedback || "");
     } catch (error) {
       Alert.alert(
@@ -693,6 +701,7 @@ export default function GameSession() {
           </Text>
         ) : null}
         {puzzleCount !== null ? <Text style={styles.pipelineText}>Generated puzzles: {puzzleCount}</Text> : null}
+        {trainingFocus?.message ? <Text style={styles.pipelineText}>{trainingFocus.message}</Text> : null}
         {coachFeedback ? <Text style={styles.pipelineText}>{coachFeedback}</Text> : null}
         {savedGame ? (
           <SecondaryButton

@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.game import Game
 from app.models.analysis import GameAnalysis, MoveAnalysis
 from app.services.game_analysis_service import analyze_game_and_save
+from app.services.puzzle_service import generate_puzzles_from_game, personalized_training_focus
 
 
 router = APIRouter(
@@ -91,6 +92,15 @@ def analyze_game(
         user_id=current_user.id,
         game=game
     )
+    generated_puzzles = generate_puzzles_from_game(
+        db=db,
+        user_id=current_user.id,
+        game=game
+    )
+    focus = personalized_training_focus(
+        db=db,
+        user_id=current_user.id
+    )
 
     return {
         "message": "Game analyzed successfully",
@@ -99,7 +109,9 @@ def analyze_game(
         "inaccuracies": analysis.inaccuracies,
         "mistakes": analysis.mistakes,
         "blunders": analysis.blunders,
-        "best_moves_found": analysis.best_moves_found
+        "best_moves_found": analysis.best_moves_found,
+        "generated_puzzles": len(generated_puzzles),
+        "personalized_training_focus": focus,
     }
 
 

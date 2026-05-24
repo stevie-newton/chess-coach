@@ -16,6 +16,21 @@ def detect_weakness_category(move_number: int, mistake_type: str, explanation: s
         if 'mate' in text:
             return 'missed mate or mating threat'
 
+        if 'fork' in text:
+            return 'missed forks'
+
+        if 'pin' in text:
+            return 'missed pins'
+
+        if 'skewer' in text:
+            return 'missed skewers'
+
+        if 'discovered' in text:
+            return 'missed discovered attacks'
+
+        if 'capture' in text or 'wins material' in text:
+            return 'missed captures'
+
         if 'king' in text:
             return 'king safety'
 
