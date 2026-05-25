@@ -142,14 +142,6 @@ function getGameResult(game, fallbackResult) {
 }
 
 function describeStatus(game, result, playMode, playerColor) {
-  if (result !== "*") {
-    if (result === "1/2-1/2") {
-      return "Game drawn.";
-    }
-
-    return result === "1-0" ? "White wins." : "Black wins.";
-  }
-
   if (game.in_checkmate()) {
     return game.turn() === "w" ? "Checkmate. Black wins." : "Checkmate. White wins.";
   }
@@ -160,6 +152,14 @@ function describeStatus(game, result, playMode, playerColor) {
 
   if (game.in_draw()) {
     return "Draw.";
+  }
+
+  if (result !== "*") {
+    if (result === "1/2-1/2") {
+      return "Game drawn.";
+    }
+
+    return result === "1-0" ? "White wins." : "Black wins.";
   }
 
   const side = game.turn() === "w" ? "White" : "Black";
@@ -302,6 +302,7 @@ export default function GameSession() {
   });
   const [gameStarted, setGameStarted] = useState(false);
   const [lastAiMove, setLastAiMove] = useState(null);
+  const [announcedGameEnd, setAnnouncedGameEnd] = useState(false);
 
   const game = useMemo(() => createGameFromMoves(moves), [moves]);
   const fen = game.fen();
@@ -322,6 +323,30 @@ export default function GameSession() {
   const statusText = describeStatus(game, finalResult, playMode, playerColor);
   const coachingNote = coachFeedback || buildCoachingNote(history, game);
   const mistakeSignal = buildMistakeSignal(moves, playerColor);
+
+  useEffect(() => {
+    if (!gameStarted || announcedGameEnd || moves.length === 0) {
+      return;
+    }
+
+    if (game.in_checkmate()) {
+      const winner = game.turn() === "w" ? "Black" : "White";
+      setAnnouncedGameEnd(true);
+      Alert.alert("Checkmate", `${winner} wins by checkmate.`);
+      return;
+    }
+
+    if (game.in_stalemate()) {
+      setAnnouncedGameEnd(true);
+      Alert.alert("Stalemate", "The game is drawn.");
+      return;
+    }
+
+    if (game.in_draw()) {
+      setAnnouncedGameEnd(true);
+      Alert.alert("Draw", "The game is drawn.");
+    }
+  }, [announcedGameEnd, game, gameStarted, moves.length]);
 
   const addMove = useCallback((move, options = {}) => {
     if (gameOver) {
@@ -353,6 +378,7 @@ export default function GameSession() {
       [playedMove.color]: current[playedMove.color] + incrementSeconds,
     }));
     setLastAiMove(options.source === "ai" ? `${playedMove.from}${playedMove.to}` : null);
+    setAnnouncedGameEnd(false);
     setManualMove("");
     setSavedGame(null);
     setAnalysis(null);
@@ -461,10 +487,12 @@ export default function GameSession() {
     });
     setResult("*");
     setLastAiMove(null);
+    setAnnouncedGameEnd(false);
   };
 
   const startGame = () => {
     setGameStarted(true);
+    setAnnouncedGameEnd(false);
   };
 
   const resetSession = () => {
@@ -482,17 +510,20 @@ export default function GameSession() {
     setClock({ w: baseSeconds, b: baseSeconds });
     setGameStarted(false);
     setLastAiMove(null);
+    setAnnouncedGameEnd(false);
   };
 
   const resign = () => {
     const losingColor = playMode === "record" ? game.turn() : playerColor;
     setResult(losingColor === "w" ? "0-1" : "1-0");
     setGameStarted(false);
+    setAnnouncedGameEnd(true);
   };
 
   const offerDraw = () => {
     setResult("1/2-1/2");
     setGameStarted(false);
+    setAnnouncedGameEnd(true);
   };
 
   const exportPgn = async () => {
@@ -644,7 +675,9 @@ export default function GameSession() {
             arrows={lastAiMove ? [{ from: lastAiMove.slice(0, 2), to: lastAiMove.slice(2, 4), color: "rgba(46, 125, 136, 0.82)" }] : []}
           />
         </View>
-        <Text style={styles.sideText}>{game.in_check() ? "Check on the board" : "Legal moves enforced"}</Text>
+        <Text style={styles.sideText}>
+          {game.in_checkmate() ? "Checkmate" : game.in_check() ? "Check on the board" : "Legal moves enforced"}
+        </Text>
         <View style={styles.manualRow}>
           <TextInput
             style={[uiStyles.input, styles.manualInput]}
