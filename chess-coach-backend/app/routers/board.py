@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -6,6 +7,7 @@ from app.core.auth_dependency import get_current_user
 from app.models.user import User
 from app.models.game import Game
 from app.models.analysis import MoveAnalysis
+from app.services.stockfish_service import best_move_for_fen
 from app.utils.chess_move_utils import parse_uci_move
 import chess
 
@@ -14,6 +16,18 @@ router = APIRouter(
     prefix="/board",
     tags=["Chessboard"]
 )
+
+
+class BestMoveRequest(BaseModel):
+    fen: str
+    level: str = Field(default="coach", pattern="^(calm|sharp|coach)$")
+
+
+AI_DEPTHS = {
+    "calm": 6,
+    "sharp": 10,
+    "coach": 14,
+}
 
 
 def best_move_san(fen: str | None, best_move: str | None):
@@ -66,6 +80,15 @@ def serialize_move_analysis(move: MoveAnalysis):
         "tactical_miss_reason": tactical_reason,
         "explanation": move.explanation
     }
+
+
+@router.post("/best-move")
+def get_best_move(
+    payload: BestMoveRequest,
+    current_user: User = Depends(get_current_user)
+):
+    depth = AI_DEPTHS.get(payload.level, AI_DEPTHS["coach"])
+    return best_move_for_fen(payload.fen, depth=depth)
 
 
 @router.get("/game/{game_id}/positions")

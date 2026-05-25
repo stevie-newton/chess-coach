@@ -23,6 +23,15 @@ PIECE_LOSS_THRESHOLDS = [
     (0.8, "pawn"),
 ]
 
+SEARCH_PIECE_VALUES = {
+    chess.PAWN: 100,
+    chess.KNIGHT: 320,
+    chess.BISHOP: 330,
+    chess.ROOK: 500,
+    chess.QUEEN: 900,
+    chess.KING: 0,
+}
+
 
 def score_to_float(score) -> float:
     if score.is_mate():
@@ -92,6 +101,148 @@ def generate_explanation(
         return f"Good move. Stockfish also considered {best_move_san}."
 
     return "Good or acceptable move."
+
+
+def _fallback_evaluate_board(board: chess.Board) -> int:
+    if board.is_checkmate():
+        return -100000 if board.turn == chess.WHITE else 100000
+
+    if board.is_stalemate() or board.is_insufficient_material():
+        return 0
+
+    score = 0
+    center_squares = [chess.D4, chess.E4, chess.D5, chess.E5]
+
+    for square, piece in board.piece_map().items():
+        value = SEARCH_PIECE_VALUES[piece.piece_type]
+        if square in center_squares:
+            value += 18 if piece.piece_type == chess.PAWN else 10
+        score += value if piece.color == chess.WHITE else -value
+
+    mobility_turn = board.turn
+    mobility = board.legal_moves.count()
+    board.turn = not board.turn
+    opponent_mobility = board.legal_moves.count()
+    board.turn = mobility_turn
+    mobility_score = (mobility - opponent_mobility) * 3
+
+    return score + (mobility_score if board.turn == chess.WHITE else -mobility_score)
+
+
+def _fallback_search(board: chess.Board, depth: int, alpha: int, beta: int) -> int:
+    if depth == 0 or board.is_game_over():
+        return _fallback_evaluate_board(board)
+
+    if board.turn == chess.WHITE:
+        value = -1000000
+        for move in board.legal_moves:
+            board.push(move)
+            value = max(value, _fallback_search(board, depth - 1, alpha, beta))
+            board.pop()
+            alpha = max(alpha, value)
+            if alpha >= beta:
+                break
+        return value
+
+    value = 1000000
+    for move in board.legal_moves:
+        board.push(move)
+        value = min(value, _fallback_search(board, depth - 1, alpha, beta))
+        board.pop()
+        beta = min(beta, value)
+        if alpha >= beta:
+            break
+    return value
+
+
+def fallback_best_move_for_fen(fen: str, depth: int = 3):
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid FEN"
+        )
+
+    if board.is_game_over():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Game is already over"
+        )
+
+    legal_moves = list(board.legal_moves)
+    if not legal_moves:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No legal moves found"
+        )
+
+    search_depth = max(2, min(depth, 4))
+    best_move = legal_moves[0]
+    best_score = -1000000 if board.turn == chess.WHITE else 1000000
+
+    for move in legal_moves:
+        board.push(move)
+        score = _fallback_search(board, search_depth - 1, -1000000, 1000000)
+        board.pop()
+
+        if board.turn == chess.WHITE and score > best_score:
+            best_score = score
+            best_move = move
+        elif board.turn == chess.BLACK and score < best_score:
+            best_score = score
+            best_move = move
+
+    return {
+        "move": best_move.uci(),
+        "san": board.san(best_move),
+        "evaluation": round(best_score / 100, 2),
+        "depth": search_depth,
+        "source": "fallback",
+    }
+
+
+def best_move_for_fen(fen: str, depth: int | None = None):
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid FEN"
+        )
+
+    if board.is_game_over():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Game is already over"
+        )
+
+    try:
+        engine = chess.engine.SimpleEngine.popen_uci(settings.STOCKFISH_PATH)
+    except Exception as e:
+        return fallback_best_move_for_fen(fen, depth=depth or 3)
+
+    try:
+        limit = chess.engine.Limit(depth=depth or settings.STOCKFISH_DEPTH)
+        result = engine.play(board, limit)
+        if not result.move:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Stockfish did not return a legal move"
+            )
+
+        score_info = engine.analyse(board, limit)
+        score = score_to_float(score_info["score"].white())
+
+        return {
+            "move": result.move.uci(),
+            "san": board.san(result.move),
+            "evaluation": score,
+            "depth": depth or settings.STOCKFISH_DEPTH,
+            "source": "stockfish",
+        }
+    finally:
+        engine.quit()
 
 
 def analyze_pgn(pgn_text: str):

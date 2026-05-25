@@ -295,6 +295,7 @@ export default function GameSession() {
   const [trainingFocus, setTrainingFocus] = useState(null);
   const [coachFeedback, setCoachFeedback] = useState("");
   const [busyAction, setBusyAction] = useState(null);
+  const [aiThinking, setAiThinking] = useState(false);
   const [clock, setClock] = useState(() => {
     const { baseSeconds } = parseTimeControl(timeControls[0]);
     return { w: baseSeconds, b: baseSeconds };
@@ -407,18 +408,47 @@ export default function GameSession() {
 
   useEffect(() => {
     if (!gameStarted || gameOver || playMode === "record" || game.turn() === playerColor) {
+      setAiThinking(false);
       return undefined;
     }
 
+    let cancelled = false;
+    const aiFen = game.fen();
+    const level = playMode === "training" ? "coach" : aiLevel;
     const timer = setTimeout(() => {
-      const aiMove = chooseAiMove(game, playMode === "training" ? "coach" : aiLevel);
+      const playAiMove = async () => {
+        setAiThinking(true);
+        let uciMove = null;
 
-      if (aiMove) {
-        addMove(`${aiMove.from}${aiMove.to}${aiMove.promotion || ""}`, { source: "ai" });
-      }
+        try {
+          const response = await api.post("/board/best-move", {
+            fen: aiFen,
+            level,
+          });
+          uciMove = response.data?.move;
+        } catch (error) {
+          console.log(error.response?.data || error.message);
+          const fallbackMove = chooseAiMove(game, level);
+          uciMove = fallbackMove ? `${fallbackMove.from}${fallbackMove.to}${fallbackMove.promotion || ""}` : null;
+        }
+
+        if (!cancelled && uciMove) {
+          addMove(uciMove, { source: "ai" });
+        }
+
+        if (!cancelled) {
+          setAiThinking(false);
+        }
+      };
+
+      void playAiMove();
     }, playMode === "training" ? 850 : 520);
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      setAiThinking(false);
+    };
   }, [addMove, aiLevel, game, gameOver, gameStarted, playerColor, playMode]);
 
   const undoMove = () => {
@@ -601,7 +631,7 @@ export default function GameSession() {
         <View style={styles.statusPanel}>
           <Text style={styles.statusText}>{statusText}</Text>
           <Text style={styles.statusMeta}>
-            You are {playerColor === "w" ? "White" : "Black"}{playMode === "record" ? " in PGN recording mode." : " against Chess Coach AI."}
+            You are {playerColor === "w" ? "White" : "Black"}{playMode === "record" ? " in PGN recording mode." : aiThinking ? " against Stockfish. AI is thinking." : " against Stockfish."}
           </Text>
         </View>
         <View style={styles.boardWrap}>

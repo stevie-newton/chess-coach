@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
-    STOCKFISH_PATH: str = r"C:\Users\nguen\Downloads\stockfish-windows-armv8\stockfish\stockfish-windows-armv8.exe"
+    STOCKFISH_PATH: str = "/usr/games/stockfish"
     STOCKFISH_DEPTH: int = 12
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-5-mini"
