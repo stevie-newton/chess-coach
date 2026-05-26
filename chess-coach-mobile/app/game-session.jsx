@@ -303,6 +303,7 @@ export default function GameSession() {
   const [gameStarted, setGameStarted] = useState(false);
   const [lastAiMove, setLastAiMove] = useState(null);
   const [announcedGameEnd, setAnnouncedGameEnd] = useState(false);
+  const [expiredClockSides, setExpiredClockSides] = useState({ w: false, b: false });
 
   const game = useMemo(() => createGameFromMoves(moves), [moves]);
   const fen = game.fen();
@@ -321,6 +322,7 @@ export default function GameSession() {
   const { baseSeconds, incrementSeconds } = useMemo(() => parseTimeControl(timeControl), [timeControl]);
   const gameOver = finalResult !== "*" || game.game_over();
   const statusText = describeStatus(game, finalResult, playMode, playerColor);
+  const expiredClockSide = expiredClockSides.w ? "White" : expiredClockSides.b ? "Black" : null;
   const coachingNote = coachFeedback || buildCoachingNote(history, game);
   const mistakeSignal = buildMistakeSignal(moves, playerColor);
 
@@ -377,6 +379,10 @@ export default function GameSession() {
       ...current,
       [playedMove.color]: current[playedMove.color] + incrementSeconds,
     }));
+    setExpiredClockSides((current) => ({
+      ...current,
+      [playedMove.color]: false,
+    }));
     setLastAiMove(options.source === "ai" ? `${playedMove.from}${playedMove.to}` : null);
     setAnnouncedGameEnd(false);
     setManualMove("");
@@ -421,16 +427,27 @@ export default function GameSession() {
       setClock((current) => {
         const nextValue = Math.max(0, current[side] - 1);
 
-        if (nextValue === 0) {
-          setResult(side === "w" ? "0-1" : "1-0");
-        }
-
         return { ...current, [side]: nextValue };
       });
     }, 1000);
 
     return () => clearInterval(timer);
   }, [game, gameOver, gameStarted, playMode]);
+
+  useEffect(() => {
+    if (!gameStarted || gameOver || playMode === "record") {
+      return;
+    }
+
+    const side = game.turn();
+    if (clock[side] > 0 || expiredClockSides[side]) {
+      return;
+    }
+
+    const sideLabel = side === "w" ? "White" : "Black";
+    setExpiredClockSides((current) => ({ ...current, [side]: true }));
+    Alert.alert("Time expired", `${sideLabel}'s clock reached 0:00. You can keep training or start a new session.`);
+  }, [clock, expiredClockSides, game, gameOver, gameStarted, playMode]);
 
   useEffect(() => {
     if (!gameStarted || gameOver || playMode === "record" || game.turn() === playerColor) {
@@ -488,6 +505,7 @@ export default function GameSession() {
     setResult("*");
     setLastAiMove(null);
     setAnnouncedGameEnd(false);
+    setExpiredClockSides({ w: false, b: false });
   };
 
   const startGame = () => {
@@ -511,6 +529,7 @@ export default function GameSession() {
     setGameStarted(false);
     setLastAiMove(null);
     setAnnouncedGameEnd(false);
+    setExpiredClockSides({ w: false, b: false });
   };
 
   const resign = () => {
@@ -664,6 +683,11 @@ export default function GameSession() {
           <Text style={styles.statusMeta}>
             You are {playerColor === "w" ? "White" : "Black"}{playMode === "record" ? " in PGN recording mode." : aiThinking ? " against Stockfish. AI is thinking." : " against Stockfish."}
           </Text>
+          {expiredClockSide ? (
+            <Text style={styles.timeExpiredText}>
+              {expiredClockSide} clock reached 0:00. Training can continue.
+            </Text>
+          ) : null}
         </View>
         <View style={styles.boardWrap}>
           <ChessboardWithArrows
@@ -830,6 +854,12 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 13,
     fontWeight: "700",
+    lineHeight: 18,
+  },
+  timeExpiredText: {
+    color: palette.danger,
+    fontSize: 13,
+    fontWeight: "900",
     lineHeight: 18,
   },
   boardWrap: {
