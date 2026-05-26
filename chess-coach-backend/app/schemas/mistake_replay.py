@@ -13,6 +13,8 @@ class MistakeReplayAttemptResponse(BaseModel):
     move_analysis_id: int
     user_move: str
     is_correct: bool
+    best_move: Optional[str] = None
+    explanation: Optional[str] = None
     time_taken_seconds: Optional[int]
     created_at: datetime
 

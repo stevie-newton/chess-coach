@@ -66,6 +66,8 @@ def get_next_mistake_replay(
         "played_move": due_mistake.played_move,
         "played_move_uci": due_mistake.played_move_uci,
         "played_move_preview": parse_uci_move(due_mistake.played_move_uci),
+        "best_move": due_mistake.best_move,
+        "best_move_preview": parse_uci_move(due_mistake.best_move),
         "mistake_type": due_mistake.mistake_type,
         "evaluation_before": due_mistake.evaluation_before,
         "evaluation_after": due_mistake.evaluation_after,
@@ -75,6 +77,16 @@ def get_next_mistake_replay(
     return {
         "message": "Excellent. You have correctly replayed all current mistakes."
     }
+
+
+def build_attempt_explanation(mistake: MoveAnalysis, is_correct: bool):
+    best_move = mistake.best_move or "the engine move"
+    source_explanation = mistake.explanation or "This move keeps the position closer to the engine's preferred plan."
+
+    if is_correct:
+        return f"Correct. {best_move} is the engine recommendation. {source_explanation}"
+
+    return f"The best move was {best_move}. {source_explanation}"
 
 
 @router.post(
@@ -130,7 +142,16 @@ def attempt_mistake_replay(
     is_correct=is_correct
 )
 
-    return attempt
+    return {
+        "id": attempt.id,
+        "move_analysis_id": attempt.move_analysis_id,
+        "user_move": attempt.user_move,
+        "is_correct": attempt.is_correct,
+        "best_move": mistake.best_move,
+        "explanation": build_attempt_explanation(mistake, is_correct),
+        "time_taken_seconds": attempt.time_taken_seconds,
+        "created_at": attempt.created_at,
+    }
 
 
 @router.get("/stats")

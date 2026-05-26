@@ -29,16 +29,32 @@ export default function MistakeReplayScreen() {
   const [userMove, setUserMove] = useState("");
   const [hintLevel, setHintLevel] = useState(1);
   const [hint, setHint] = useState(null);
+  const [hintHistory, setHintHistory] = useState([]);
+  const [attemptFeedback, setAttemptFeedback] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const boardSize = Math.min(Math.max(width - 72, 240), 334);
+
+  const moveToSquares = (move) => {
+    const normalized = move?.trim().toLowerCase();
+    if (!normalized || normalized.length < 4) {
+      return null;
+    }
+
+    return {
+      from: normalized.slice(0, 2),
+      to: normalized.slice(2, 4),
+    };
+  };
 
   const loadNextMistake = useCallback(async () => {
     try {
       setLoading(true);
       setHint(null);
+      setHintHistory([]);
       setHintLevel(1);
       setUserMove("");
+      setAttemptFeedback(null);
 
       const response = await api.get("/mistake-replay/next");
       setPosition(response.data);
@@ -68,10 +84,19 @@ export default function MistakeReplayScreen() {
         `/mistake-replay/${position.move_analysis_id}/hint/${hintLevel}`
       );
 
-      setHint(response.data.hint);
+      const nextHint = {
+        level: response.data.hint_level || hintLevel,
+        text: response.data.hint,
+      };
 
-      if (hintLevel < 4) {
-        setHintLevel(hintLevel + 1);
+      setHint(nextHint.text);
+      setHintHistory((current) => {
+        const withoutSameLevel = current.filter((item) => item.level !== nextHint.level);
+        return [...withoutSameLevel, nextHint].sort((a, b) => a.level - b.level);
+      });
+
+      if (nextHint.level < 4) {
+        setHintLevel(nextHint.level + 1);
       }
     } catch (error) {
       if (error.response?.status === 401) {
@@ -105,14 +130,13 @@ export default function MistakeReplayScreen() {
       );
 
       setUserMove(moveToSubmit);
+      setAttemptFeedback(response.data);
 
       if (response.data.is_correct) {
-        Alert.alert("Correct", "Great job! You found the best move.");
+        Alert.alert("Correct", "Great job. The explanation is shown below.");
       } else {
-        Alert.alert("Incorrect", "Not the best move. Try to review the hint.");
+        Alert.alert("Incorrect", "Not the best move. The correct move is shown on the board.");
       }
-
-      loadNextMistake();
     } catch (error) {
       if (error.response?.status === 401) {
         await logout();
@@ -175,6 +199,53 @@ export default function MistakeReplayScreen() {
     );
   }
 
+  const submittedSquares = moveToSquares(userMove);
+  const bestMove = attemptFeedback?.best_move || position.best_move;
+  const bestSquares = moveToSquares(bestMove);
+  const showBestMove = attemptFeedback && bestSquares;
+  const arrows = [];
+  const highlights = [];
+
+  if (attemptFeedback && submittedSquares) {
+    arrows.push({
+      ...submittedSquares,
+      id: "mistake-replay-submitted",
+      color: attemptFeedback.is_correct ? "rgba(30, 142, 84, 0.82)" : "rgba(201, 90, 106, 0.78)",
+    });
+    highlights.push(
+      {
+        square: submittedSquares.from,
+        color: attemptFeedback.is_correct ? "rgba(30, 142, 84, 0.22)" : "rgba(201, 90, 106, 0.22)",
+        borderColor: attemptFeedback.is_correct ? "rgba(30, 142, 84, 0.82)" : "rgba(201, 90, 106, 0.78)",
+      },
+      {
+        square: submittedSquares.to,
+        color: attemptFeedback.is_correct ? "rgba(30, 142, 84, 0.3)" : "rgba(201, 90, 106, 0.3)",
+        borderColor: attemptFeedback.is_correct ? "rgba(30, 142, 84, 0.94)" : "rgba(201, 90, 106, 0.9)",
+      }
+    );
+  }
+
+  if (showBestMove && !attemptFeedback.is_correct) {
+    arrows.push({
+      ...bestSquares,
+      id: "mistake-replay-best",
+      color: "rgba(30, 142, 84, 0.88)",
+    });
+    highlights.push(
+      {
+        square: bestSquares.from,
+        color: "rgba(30, 142, 84, 0.2)",
+        borderColor: "rgba(30, 142, 84, 0.82)",
+      },
+      {
+        square: bestSquares.to,
+        color: "rgba(30, 142, 84, 0.3)",
+        borderColor: "rgba(30, 142, 84, 0.94)",
+      }
+    );
+  }
+
   return (
     <AppShell
       showBack
@@ -203,7 +274,9 @@ export default function MistakeReplayScreen() {
             boardSize={boardSize}
             withLetters={true}
             withNumbers={true}
-            onMove={submitAttempt}
+            onMove={attemptFeedback ? null : submitAttempt}
+            arrows={arrows}
+            highlights={highlights}
           />
         </View>
 
@@ -228,16 +301,46 @@ export default function MistakeReplayScreen() {
             : "Tap a piece, then tap the destination square."}
         </Text>
 
-        {hint ? (
+        {hintHistory.length > 0 ? (
           <View style={styles.hintBox}>
             <MaterialCommunityIcons name="lightbulb-on" size={20} color={palette.gold} />
-            <Text style={styles.hintText}>{hint}</Text>
+            <View style={styles.hintCopy}>
+              {hintHistory.map((item) => (
+                <View key={item.level} style={styles.hintLine}>
+                  <Text style={styles.hintLevel}>Hint {item.level}</Text>
+                  <Text style={styles.hintText}>{item.text}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {showBestMove ? (
+          <View style={styles.solutionBox}>
+            <MaterialCommunityIcons name="target" size={20} color={palette.sage} />
+            <View style={styles.solutionCopy}>
+              <Text style={styles.solutionLabel}>
+                {attemptFeedback.is_correct ? "Why this move works" : "Correct move"}
+              </Text>
+              <Text style={styles.solutionMove}>{bestMove}</Text>
+              {attemptFeedback.explanation ? (
+                <Text style={styles.solutionExplanation}>{attemptFeedback.explanation}</Text>
+              ) : null}
+            </View>
           </View>
         ) : null}
 
         <View style={styles.actionRow}>
-          <SecondaryButton title="Hint" icon="lightbulb-outline" onPress={getHint} />
-          <PrimaryButton title="Submit" icon="send" onPress={submitAttempt} />
+          <SecondaryButton
+            title={hintLevel >= 4 && hint ? "Final hint" : `Hint ${hintLevel}`}
+            icon="lightbulb-outline"
+            onPress={getHint}
+          />
+          <PrimaryButton
+            title={attemptFeedback ? "Next position" : "Submit"}
+            icon={attemptFeedback ? "skip-next" : "send"}
+            onPress={attemptFeedback ? loadNextMistake : submitAttempt}
+          />
         </View>
         <SecondaryButton title="Skip this position" icon="skip-next" onPress={loadNextMistake} />
       </PremiumPanel>
@@ -353,9 +456,52 @@ const styles = StyleSheet.create({
     gap: 9,
     padding: 12,
   },
+  hintCopy: {
+    flex: 1,
+    gap: 8,
+  },
+  hintLine: {
+    gap: 3,
+  },
+  hintLevel: {
+    color: palette.gold,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
   hintText: {
     color: palette.ink,
     flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  solutionBox: {
+    alignItems: "flex-start",
+    backgroundColor: "#243A2D",
+    borderColor: palette.sage,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 9,
+    padding: 12,
+  },
+  solutionCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  solutionLabel: {
+    color: palette.sage,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  solutionMove: {
+    color: palette.ink,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  solutionExplanation: {
+    color: palette.mutedDark,
     fontSize: 14,
     lineHeight: 20,
   },
