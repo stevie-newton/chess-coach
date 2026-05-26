@@ -26,6 +26,16 @@ router = APIRouter(
 )
 
 
+PIECE_VALUES = {
+    chess.PAWN: 1,
+    chess.KNIGHT: 3,
+    chess.BISHOP: 3,
+    chess.ROOK: 5,
+    chess.QUEEN: 9,
+    chess.KING: 99,
+}
+
+
 @router.get("/next")
 def get_next_mistake_replay(
     db: Session = Depends(get_db),
@@ -92,22 +102,77 @@ def best_move_reason(mistake: MoveAnalysis):
 
         san = board.san(best_move)
         piece = board.piece_at(best_move.from_square)
+        reasons = []
 
-        if board.gives_check(best_move):
-            return san, "It is forcing because it gives check and limits the opponent's replies."
+        board.push(best_move)
+        gives_check = board.is_check()
+        gives_mate = board.is_checkmate()
+        moved_piece = board.piece_at(best_move.to_square)
+        attacked_targets = []
+        controlled_squares = []
+        if moved_piece:
+            for square in board.attacks(best_move.to_square):
+                target = board.piece_at(square)
+                if (
+                    target
+                    and target.color != moved_piece.color
+                    and PIECE_VALUES.get(target.piece_type, 0) >= 3
+                ):
+                    attacked_targets.append(
+                        f"{chess.piece_name(target.piece_type)} on {chess.square_name(square)}"
+                    )
+                elif (
+                    square in {chess.D4, chess.E4, chess.D5, chess.E5}
+                    or (
+                        moved_piece.color == chess.WHITE
+                        and chess.A5 <= square <= chess.H8
+                    )
+                    or (
+                        moved_piece.color == chess.BLACK
+                        and chess.A1 <= square <= chess.H4
+                    )
+                ):
+                    controlled_squares.append(chess.square_name(square))
+        board.pop()
+
+        if gives_mate:
+            reasons.append("delivers checkmate")
+        elif gives_check:
+            reasons.append("gives check, so the opponent has to answer the king threat")
 
         if board.is_capture(best_move):
             captured_piece = board.piece_at(best_move.to_square)
             if captured_piece:
-                return san, f"It wins or removes the opponent's {captured_piece.symbol().upper()} from an important square."
-            return san, "It captures on a tactically important square."
+                reasons.append(
+                    f"captures the {chess.piece_name(captured_piece.piece_type)} on {chess.square_name(best_move.to_square)}"
+                )
+            else:
+                reasons.append("captures on a tactically important square")
 
         if best_move.promotion:
-            return san, "It converts a passed pawn into a promoted piece."
+            reasons.append(f"promotes the pawn to a {chess.piece_name(best_move.promotion)}")
 
-        if piece:
+        if attacked_targets:
+            if len(attacked_targets) >= 2:
+                reasons.append(f"creates a fork on {', '.join(attacked_targets[:2])}")
+            else:
+                reasons.append(f"attacks the {attacked_targets[0]}")
+
+        if board.is_castling(best_move):
+            reasons.append("castles the king to safety and connects the rooks")
+
+        if not reasons and piece:
             piece_name = chess.piece_name(piece.piece_type)
-            return san, f"It improves the {piece_name}, increasing activity without giving the opponent a tactic."
+            square_detail = ""
+            if controlled_squares:
+                square_detail = f", where it controls {', '.join(sorted(controlled_squares)[:3])}"
+            reasons.append(
+                f"moves the {piece_name} from {chess.square_name(best_move.from_square)} "
+                f"to {chess.square_name(best_move.to_square)}{square_detail}"
+            )
+
+        if reasons:
+            return san, "It " + " and ".join(reasons) + "."
 
         return san, fallback
     except (ValueError, TypeError):
