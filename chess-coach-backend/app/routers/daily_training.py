@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -18,12 +19,22 @@ from app.services.daily_training_service import (
 from app.services.progression_service import complete_daily_progression
 from app.services.post_training_report_service import build_post_training_report
 from app.services.skill_profile_service import detect_skill_profile
+from app.services.openai_coach_service import call_openai_coach
 
 
 router = APIRouter(
     prefix="/daily-training",
     tags=["Daily Training"]
 )
+
+
+class DailyTrainingCoachQuestion(BaseModel):
+    question: str
+
+
+class DailyTrainingCoachAnswer(BaseModel):
+    feature: str
+    answer: str
 
 
 @router.get("/today")
@@ -137,6 +148,38 @@ def get_today_training_dashboard(
     }
 
 
+@router.post("/ask", response_model=DailyTrainingCoachAnswer)
+def ask_daily_training_coach(
+    payload: DailyTrainingCoachQuestion,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Question is required"
+        )
+
+    context = build_daily_training_context(db=db, current_user=current_user)
+    answer = call_openai_coach(
+        feature="Daily Training Coach",
+        prompt=(
+            "Answer the user's question about today's training session. "
+            "Use the daily plan, due reviews, puzzle stats, weaknesses, skill profile, and detected patterns. "
+            "Be specific and practical."
+            f"\n\nQuestion: {question}"
+        ),
+        context=context,
+        coach_personality=current_user.coach_personality,
+    )
+
+    return {
+        "feature": "Daily Training Coach",
+        "answer": answer,
+    }
+
+
 @router.post("/complete")
 def complete_today_training(
     db: Session = Depends(get_db),
@@ -189,6 +232,79 @@ def complete_today_training(
         "post_training_report": post_training_report,
         "progression": progression,
     }
+
+
+def build_daily_training_context(db: Session, current_user: User) -> str:
+    today_name = datetime.now().strftime("%A")
+    now = datetime.now(timezone.utc)
+    skill_profile = detect_skill_profile(db=db, user=current_user)
+
+    today_schedule = (
+        db.query(StudySchedule)
+        .filter(
+            StudySchedule.user_id == current_user.id,
+            StudySchedule.day == today_name
+        )
+        .order_by(StudySchedule.created_at.desc())
+        .first()
+    )
+
+    detected_patterns = detect_daily_training_patterns(db=db, user_id=current_user.id)
+    due_mistakes = (
+        db.query(MistakeReviewState)
+        .filter(
+            MistakeReviewState.user_id == current_user.id,
+            MistakeReviewState.due_at <= now
+        )
+        .count()
+    )
+    puzzle_attempts = db.query(PuzzleAttempt).filter(PuzzleAttempt.user_id == current_user.id).count()
+    puzzle_correct = (
+        db.query(PuzzleAttempt)
+        .filter(PuzzleAttempt.user_id == current_user.id, PuzzleAttempt.is_correct == True)
+        .count()
+    )
+    puzzle_success_rate = 0 if puzzle_attempts == 0 else round((puzzle_correct / puzzle_attempts) * 100, 2)
+    top_weakness = (
+        db.query(Weakness)
+        .filter(Weakness.user_id == current_user.id)
+        .order_by(Weakness.severity.desc(), Weakness.frequency.desc())
+        .first()
+    )
+
+    pattern_lines = [
+        f"- {pattern['label']}: score {pattern['score']}; {pattern['description']}"
+        for pattern in detected_patterns
+    ] or ["- No strong daily pattern detected"]
+
+    context_lines = [
+        f"Day: {today_name}",
+        "Study schedule:",
+        f"- Focus area: {today_schedule.focus_area if today_schedule else 'none'}",
+        f"- Activity: {today_schedule.activity if today_schedule else 'none'}",
+        f"- Duration: {today_schedule.duration_minutes if today_schedule else 0} minutes",
+        f"- Completed: {today_schedule.completed if today_schedule else False}",
+        "Daily training signals:",
+        f"- Due mistake reviews: {due_mistakes}",
+        f"- Puzzle attempts: {puzzle_attempts}",
+        f"- Puzzle correct: {puzzle_correct}",
+        f"- Puzzle success rate: {puzzle_success_rate}%",
+        (
+            f"- Priority weakness: {top_weakness.category}, frequency {top_weakness.frequency}, "
+            f"severity {top_weakness.severity}"
+            if top_weakness
+            else "- Priority weakness: none"
+        ),
+        "Detected patterns:",
+        *pattern_lines,
+        "Skill profile:",
+        f"- Detected level: {skill_profile['detected_level']}",
+        f"- Confidence: {skill_profile['confidence']}",
+        f"- Puzzle difficulty: {skill_profile['adaptation']['puzzle_difficulty']}",
+        f"- Coaching language: {skill_profile['adaptation']['coaching_language']}",
+    ]
+
+    return "\n".join(context_lines)
 
 
 def build_recommended_actions(

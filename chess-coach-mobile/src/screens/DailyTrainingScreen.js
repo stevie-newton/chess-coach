@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { useEffect, useState } from "react";
-import { Alert, Platform, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { api } from "../api/client";
 import {
   AppShell,
@@ -12,6 +12,7 @@ import {
   SectionHeader,
   StatPill,
   palette,
+  uiStyles,
 } from "../components/PremiumUI";
 
 export default function DailyTrainingScreen({ showBack = true }) {
@@ -19,6 +20,9 @@ export default function DailyTrainingScreen({ showBack = true }) {
   const [completionReport, setCompletionReport] = useState(null);
   const [postTrainingReport, setPostTrainingReport] = useState(null);
   const [progression, setProgression] = useState(null);
+  const [coachQuestion, setCoachQuestion] = useState("");
+  const [coachAnswer, setCoachAnswer] = useState(null);
+  const [coachLoading, setCoachLoading] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -94,6 +98,28 @@ export default function DailyTrainingScreen({ showBack = true }) {
     }
   };
 
+  const askDailyCoach = async () => {
+    const question = coachQuestion.trim();
+
+    if (!question) {
+      Alert.alert("Ask Coach", "Enter a question about today's training first.");
+      return;
+    }
+
+    try {
+      setCoachLoading(true);
+      const response = await api.post("/daily-training/ask", { question });
+      setCoachAnswer(response.data?.answer || "");
+    } catch (error) {
+      Alert.alert(
+        "Coach unavailable",
+        error.response?.data?.detail || "Could not answer this training question"
+      );
+    } finally {
+      setCoachLoading(false);
+    }
+  };
+
   return (
     <AppShell
       showBack={showBack}
@@ -148,6 +174,31 @@ export default function DailyTrainingScreen({ showBack = true }) {
               body="Create or import training data to generate real daily work."
             />
           )}
+
+          <PremiumPanel style={styles.askCoachPanel}>
+            <Text style={styles.askCoachTitle}>Ask Coach</Text>
+            <TextInput
+              style={[uiStyles.input, styles.askCoachInput]}
+              placeholder="Ask about today's focus, schedule, or what to do first..."
+              placeholderTextColor={palette.muted}
+              multiline
+              textAlignVertical="top"
+              value={coachQuestion}
+              onChangeText={setCoachQuestion}
+            />
+            <PrimaryButton
+              title={coachLoading ? "Thinking..." : "Ask about today's training"}
+              icon="chat-question"
+              onPress={askDailyCoach}
+              disabled={coachLoading}
+            />
+            {coachAnswer ? (
+              <View style={styles.coachAnswerPanel}>
+                <Text style={styles.coachAnswerLabel}>Coach answer</Text>
+                <Text style={styles.coachAnswerText}>{coachAnswer}</Text>
+              </View>
+            ) : null}
+          </PremiumPanel>
 
           {completionReport ? (
             <PremiumPanel style={styles.completionPanel}>
@@ -310,6 +361,40 @@ const styles = StyleSheet.create({
     color: palette.mutedDark,
     fontSize: 13,
     lineHeight: 18,
+  },
+  askCoachPanel: {
+    gap: 10,
+    marginBottom: 18,
+  },
+  askCoachTitle: {
+    color: palette.gold,
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  askCoachInput: {
+    minHeight: 88,
+    paddingTop: 12,
+  },
+  coachAnswerPanel: {
+    backgroundColor: "rgba(215, 179, 90, 0.13)",
+    borderColor: "rgba(215, 179, 90, 0.35)",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 5,
+    padding: 10,
+  },
+  coachAnswerLabel: {
+    color: palette.gold,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  coachAnswerText: {
+    color: palette.ink,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
   },
   completionPanel: {
     gap: 12,
