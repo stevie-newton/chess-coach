@@ -43,6 +43,17 @@ class PuzzleAttemptResponse(BaseModel):
         from_attributes = True
 
 
+class PuzzleCoachQuestion(BaseModel):
+    question: str
+    current_move: Optional[str] = None
+
+
+class PuzzleCoachAnswer(BaseModel):
+    puzzle_id: int
+    answer: str
+    source: str
+
+
 class PuzzleLineMove(BaseModel):
     ply: int
     uci: str

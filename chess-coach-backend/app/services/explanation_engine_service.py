@@ -310,6 +310,125 @@ def _openai_explanation(
     return "\n".join(chunks).strip() or None
 
 
+def _extract_output_text(data: dict) -> str:
+    if data.get("output_text"):
+        return data["output_text"].strip()
+
+    chunks = []
+    for item in data.get("output", []):
+        for content in item.get("content", []):
+            if content.get("type") == "output_text" and content.get("text"):
+                chunks.append(content["text"])
+
+    return "\n".join(chunks).strip()
+
+
+def ask_puzzle_coach(
+    puzzle: Puzzle,
+    question: str,
+    move_analysis: MoveAnalysis | None = None,
+    recent_attempts: list | None = None,
+    current_move: str | None = None,
+    solution_line: list[dict] | None = None,
+    coach_personality: str | None = None,
+) -> str | None:
+    if not settings.OPENAI_API_KEY:
+        return None
+
+    try:
+        board = chess.Board(puzzle.fen)
+        best_move_reason = _move_reason(board, puzzle.solution)
+        side_to_move = "White" if board.turn == chess.WHITE else "Black"
+    except ValueError:
+        best_move_reason = "The saved FEN is invalid, so only stored metadata can be used."
+        side_to_move = "Unknown"
+
+    attempt_lines = []
+    for attempt in recent_attempts or []:
+        attempt_lines.append(
+            f"- {attempt.user_move}: {'correct' if attempt.is_correct else 'incorrect'}"
+        )
+
+    if current_move:
+        try:
+            current_validation = _move_reason(chess.Board(puzzle.fen), current_move)
+        except ValueError:
+            current_validation = "Could not parse the current move against this position."
+    else:
+        current_validation = "No current move was selected in the UI."
+
+    line_text = []
+    for move in solution_line or []:
+        line_text.append(
+            f"{move['ply'] + 1}. {move['san']} ({move['uci']}), FEN after: {move['fen_after']}"
+        )
+
+    context = [
+        f"FEN: {puzzle.fen}",
+        f"Side to move: {side_to_move}",
+        f"Best move: {puzzle.solution}",
+        f"Best move reason from board facts: {best_move_reason}",
+        f"Puzzle theme: {puzzle.theme or 'best move training'}",
+        f"Difficulty: {puzzle.difficulty}",
+        f"Current selected move: {current_move or 'none'}",
+        f"Current selected move board facts: {current_validation}",
+        "Recent attempts:",
+        *(attempt_lines or ["- none"]),
+        "Engine continuation, if available:",
+        *(line_text or ["- not available"]),
+    ]
+
+    if move_analysis:
+        context.extend(
+            [
+                "Original game mistake context:",
+                f"- Move: {move_analysis.move_number} {move_analysis.color}",
+                f"- Played move: {move_analysis.played_move} ({move_analysis.played_move_uci})",
+                f"- Engine best move: {move_analysis.best_move}",
+                f"- Mistake type: {move_analysis.mistake_type}",
+                f"- Evaluation before: {move_analysis.evaluation_before}",
+                f"- Evaluation after: {move_analysis.evaluation_after}",
+                f"- Stored explanation: {move_analysis.explanation}",
+            ]
+        )
+
+    try:
+        response = requests.post(
+            OPENAI_RESPONSES_URL,
+            headers={
+                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": settings.OPENAI_MODEL,
+                "instructions": (
+                    "You are a chess puzzle coach answering a follow-up question about one exact puzzle. "
+                    "Use only the provided position, moves, attempts, and engine continuation as factual context. "
+                    "Be concrete: name the move, target square, capture, check, fork, threat, or defensive reason. "
+                    "If the user asks for a line and no verified line is available, say that instead of inventing one. "
+                    "Keep the answer concise but helpful, usually 2-5 short sentences. "
+                    f"Coaching personality: {coach_voice(coach_personality)['label']}. "
+                    f"Voice rules: {coach_voice(coach_personality)['instruction']}"
+                ),
+                "input": "\n".join(
+                    [
+                        "Puzzle context:",
+                        *context,
+                        "",
+                        "User question:",
+                        question,
+                    ]
+                ),
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        return None
+
+    return _extract_output_text(response.json()) or None
+
+
 def explain_puzzle_attempt(
     puzzle: Puzzle,
     validation: dict,

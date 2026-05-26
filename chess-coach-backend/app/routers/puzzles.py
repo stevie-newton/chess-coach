@@ -8,8 +8,15 @@ from app.models.user import User
 from app.models.game import Game
 from app.models.analysis import MoveAnalysis
 from app.models.puzzle import Puzzle, PuzzleAttempt
-from app.schemas.puzzle import PuzzleResponse, PuzzleAttemptCreate, PuzzleAttemptResponse, PuzzleLineResponse
-from app.services.explanation_engine_service import explain_puzzle_attempt
+from app.schemas.puzzle import (
+    PuzzleCoachAnswer,
+    PuzzleCoachQuestion,
+    PuzzleResponse,
+    PuzzleAttemptCreate,
+    PuzzleAttemptResponse,
+    PuzzleLineResponse,
+)
+from app.services.explanation_engine_service import ask_puzzle_coach, explain_puzzle_attempt
 from app.services.progression_service import award_xp
 from app.services.puzzle_service import (
     build_puzzle_solution_line,
@@ -98,6 +105,76 @@ def get_puzzle(
         )
 
     return puzzle
+
+
+@router.post("/{puzzle_id}/ask", response_model=PuzzleCoachAnswer)
+def ask_about_puzzle(
+    puzzle_id: int,
+    payload: PuzzleCoachQuestion,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not payload.question.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Question is required"
+        )
+
+    puzzle = (
+        db.query(Puzzle)
+        .filter(Puzzle.id == puzzle_id, Puzzle.user_id == current_user.id)
+        .first()
+    )
+
+    if not puzzle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Puzzle not found"
+        )
+
+    move_analysis = None
+    if puzzle.move_analysis_id:
+        move_analysis = (
+            db.query(MoveAnalysis)
+            .filter(MoveAnalysis.id == puzzle.move_analysis_id)
+            .first()
+        )
+
+    recent_attempts = (
+        db.query(PuzzleAttempt)
+        .filter(PuzzleAttempt.puzzle_id == puzzle.id, PuzzleAttempt.user_id == current_user.id)
+        .order_by(PuzzleAttempt.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    solution_line = build_puzzle_solution_line(
+        fen=puzzle.fen,
+        solution=puzzle.solution,
+        max_plies=5,
+    )
+
+    answer = ask_puzzle_coach(
+        puzzle=puzzle,
+        question=payload.question.strip(),
+        move_analysis=move_analysis,
+        recent_attempts=recent_attempts,
+        current_move=payload.current_move,
+        solution_line=solution_line,
+        coach_personality=current_user.coach_personality,
+    )
+
+    if not answer:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The puzzle coach is unavailable right now. Check the OpenAI configuration and try again."
+        )
+
+    return {
+        "puzzle_id": puzzle.id,
+        "answer": answer,
+        "source": "openai",
+    }
 
 
 @router.get("/{puzzle_id}/line", response_model=PuzzleLineResponse)

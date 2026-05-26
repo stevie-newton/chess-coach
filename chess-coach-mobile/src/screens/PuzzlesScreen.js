@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { api } from "../api/client";
 import ChessboardWithArrows from "../components/ChessboardWithArrows";
 import {
@@ -12,6 +12,7 @@ import {
   SecondaryButton,
   StatPill,
   palette,
+  uiStyles,
 } from "../components/PremiumUI";
 
 const SOLUTION_REVEAL_FAILS = 3;
@@ -28,6 +29,9 @@ export default function PuzzlesScreen({ showBack = true }) {
   const [lineByPuzzle, setLineByPuzzle] = useState({});
   const [autoMoveByPuzzle, setAutoMoveByPuzzle] = useState({});
   const [boardResetByPuzzle, setBoardResetByPuzzle] = useState({});
+  const [coachQuestionByPuzzle, setCoachQuestionByPuzzle] = useState({});
+  const [coachAnswerByPuzzle, setCoachAnswerByPuzzle] = useState({});
+  const [coachLoadingByPuzzle, setCoachLoadingByPuzzle] = useState({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(null);
   const autoMoveTimersRef = useRef({});
@@ -339,6 +343,34 @@ export default function PuzzlesScreen({ showBack = true }) {
     setHintsByPuzzle((current) => ({ ...current, [puzzle.id]: hint }));
   };
 
+  const askPuzzleCoach = async (puzzle) => {
+    const question = coachQuestionByPuzzle[puzzle.id]?.trim();
+
+    if (!question) {
+      Alert.alert("Ask Coach", "Enter a question about this puzzle first.");
+      return;
+    }
+
+    try {
+      setCoachLoadingByPuzzle((current) => ({ ...current, [puzzle.id]: true }));
+      const response = await api.post(`/puzzles/${puzzle.id}/ask`, {
+        question,
+        current_move: moves[puzzle.id] || null,
+      });
+      setCoachAnswerByPuzzle((current) => ({
+        ...current,
+        [puzzle.id]: response.data?.answer || "",
+      }));
+    } catch (error) {
+      Alert.alert(
+        "Coach unavailable",
+        error.response?.data?.detail || "Could not answer this puzzle question"
+      );
+    } finally {
+      setCoachLoadingByPuzzle((current) => ({ ...current, [puzzle.id]: false }));
+    }
+  };
+
   useEffect(() => {
     async function loadPuzzles() {
       try {
@@ -591,6 +623,36 @@ export default function PuzzlesScreen({ showBack = true }) {
                     : "Tap a piece, then tap the destination square."}
                 </Text>
 
+                <View style={styles.askCoachPanel}>
+                  <Text style={styles.askCoachTitle}>Ask Coach</Text>
+                  <TextInput
+                    style={[uiStyles.input, styles.askCoachInput]}
+                    placeholder="Ask why the engine prefers this move..."
+                    placeholderTextColor={palette.muted}
+                    multiline
+                    textAlignVertical="top"
+                    value={coachQuestionByPuzzle[puzzle.id] || ""}
+                    onChangeText={(value) =>
+                      setCoachQuestionByPuzzle((current) => ({
+                        ...current,
+                        [puzzle.id]: value,
+                      }))
+                    }
+                  />
+                  <PrimaryButton
+                    title={coachLoadingByPuzzle[puzzle.id] ? "Thinking..." : "Ask about this puzzle"}
+                    icon="chat-question"
+                    onPress={() => askPuzzleCoach(puzzle)}
+                    disabled={coachLoadingByPuzzle[puzzle.id]}
+                  />
+                  {coachAnswerByPuzzle[puzzle.id] ? (
+                    <View style={styles.coachAnswerPanel}>
+                      <Text style={styles.coachAnswerLabel}>Coach answer</Text>
+                      <Text style={styles.coachAnswerText}>{coachAnswerByPuzzle[puzzle.id]}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
                 <PrimaryButton
                   title={submitting === puzzle.id ? "Submitting..." : "Submit move"}
                   icon="send"
@@ -688,6 +750,44 @@ const styles = StyleSheet.create({
   },
   correctMoveHint: {
     color: "#1E8E54",
+  },
+  askCoachPanel: {
+    backgroundColor: palette.ivory,
+    borderColor: palette.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 9,
+    padding: 11,
+  },
+  askCoachTitle: {
+    color: palette.gold,
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  askCoachInput: {
+    minHeight: 82,
+    paddingTop: 12,
+  },
+  coachAnswerPanel: {
+    backgroundColor: "rgba(215, 179, 90, 0.13)",
+    borderColor: "rgba(215, 179, 90, 0.35)",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 5,
+    padding: 10,
+  },
+  coachAnswerLabel: {
+    color: palette.gold,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  coachAnswerText: {
+    color: palette.ink,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
   },
   correctPanel: {
     backgroundColor: "rgba(30, 142, 84, 0.12)",
