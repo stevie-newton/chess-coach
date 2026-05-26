@@ -17,6 +17,7 @@ from app.utils.chess_move_utils import parse_uci_move
 from datetime import datetime, timezone
 from app.models.mistake_replay import MistakeReplayAttempt, MistakeReviewState
 from app.services.spaced_repetition_service import update_review_state
+import chess
 
 
 router = APIRouter(
@@ -79,14 +80,48 @@ def get_next_mistake_replay(
     }
 
 
+def best_move_reason(mistake: MoveAnalysis):
+    fallback = "It keeps the position closer to the engine's preferred plan."
+
+    try:
+        board = chess.Board(mistake.fen_before)
+        best_move = chess.Move.from_uci(mistake.best_move)
+
+        if best_move not in board.legal_moves:
+            return mistake.best_move, fallback
+
+        san = board.san(best_move)
+        piece = board.piece_at(best_move.from_square)
+
+        if board.gives_check(best_move):
+            return san, "It is forcing because it gives check and limits the opponent's replies."
+
+        if board.is_capture(best_move):
+            captured_piece = board.piece_at(best_move.to_square)
+            if captured_piece:
+                return san, f"It wins or removes the opponent's {captured_piece.symbol().upper()} from an important square."
+            return san, "It captures on a tactically important square."
+
+        if best_move.promotion:
+            return san, "It converts a passed pawn into a promoted piece."
+
+        if piece:
+            piece_name = chess.piece_name(piece.piece_type)
+            return san, f"It improves the {piece_name}, increasing activity without giving the opponent a tactic."
+
+        return san, fallback
+    except (ValueError, TypeError):
+        return mistake.best_move or "the engine move", fallback
+
+
 def build_attempt_explanation(mistake: MoveAnalysis, is_correct: bool):
     best_move = mistake.best_move or "the engine move"
-    source_explanation = mistake.explanation or "This move keeps the position closer to the engine's preferred plan."
+    best_move_label, reason = best_move_reason(mistake)
 
     if is_correct:
-        return f"Correct. {best_move} is the engine recommendation. {source_explanation}"
+        return f"Correct. {best_move_label} is the engine recommendation. {reason}"
 
-    return f"The best move was {best_move}. {source_explanation}"
+    return f"The best move was {best_move_label} ({best_move}). {reason}"
 
 
 @router.post(
