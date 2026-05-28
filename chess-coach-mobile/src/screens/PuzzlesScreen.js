@@ -627,12 +627,6 @@ export default function PuzzlesScreen({ showBack = true }) {
 
                 <View style={styles.askCoachPanel}>
                   <Text style={styles.askCoachTitle}>Ask Coach</Text>
-                  {coachAnswerByPuzzle[puzzle.id] ? (
-                    <View style={styles.coachAnswerPanel}>
-                      <Text style={styles.coachAnswerLabel}>Coach answer</Text>
-                      <Text style={styles.coachAnswerText}>{coachAnswerByPuzzle[puzzle.id]}</Text>
-                    </View>
-                  ) : null}
                   <TextInput
                     style={[uiStyles.input, styles.askCoachInput]}
                     placeholder="Ask why the engine prefers this move..."
@@ -640,12 +634,21 @@ export default function PuzzlesScreen({ showBack = true }) {
                     multiline
                     textAlignVertical="top"
                     value={coachQuestionByPuzzle[puzzle.id] || ""}
-                    onChangeText={(value) =>
+                    onChangeText={(value) => {
                       setCoachQuestionByPuzzle((current) => ({
                         ...current,
                         [puzzle.id]: value,
-                      }))
-                    }
+                      }));
+                      setCoachAnswerByPuzzle((current) => {
+                        if (!current[puzzle.id]) {
+                          return current;
+                        }
+
+                        const next = { ...current };
+                        delete next[puzzle.id];
+                        return next;
+                      });
+                    }}
                   />
                   <PrimaryButton
                     title={coachLoadingByPuzzle[puzzle.id] ? "Thinking..." : "Ask about this puzzle"}
@@ -653,6 +656,12 @@ export default function PuzzlesScreen({ showBack = true }) {
                     onPress={() => askPuzzleCoach(puzzle)}
                     disabled={coachLoadingByPuzzle[puzzle.id]}
                   />
+                  {coachAnswerByPuzzle[puzzle.id] ? (
+                    <View style={styles.coachAnswerPanel}>
+                      <Text style={styles.coachAnswerLabel}>Coach answer</Text>
+                      <Text style={styles.coachAnswerText}>{coachAnswerByPuzzle[puzzle.id]}</Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 <PrimaryButton

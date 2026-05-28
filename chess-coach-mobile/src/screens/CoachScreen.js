@@ -54,6 +54,7 @@ export default function CoachScreen({ showBack = true }) {
   }, []);
 
   const updateField = (field, value) => {
+    setAnswer(null);
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -265,22 +266,22 @@ export default function CoachScreen({ showBack = true }) {
           disabled={coachLoading}
           onPress={runCoachFeature}
         />
+
+        {answer ? (
+          <View style={styles.answerPanel}>
+            <Text style={styles.answerLabel}>{answer.feature}</Text>
+            <Text style={styles.answerText}>{answer.answer}</Text>
+          </View>
+        ) : null}
       </PremiumPanel>
 
-      {answer ? (
-        <>
-          <SectionHeader label={answer.feature} />
-          <PremiumPanel style={styles.answerPanel}>
-            <Text style={styles.answerText}>{answer.answer}</Text>
-          </PremiumPanel>
-        </>
-      ) : (
+      {!answer ? (
         <EmptyState
           icon="account-tie-voice"
           title="Choose a coach tool"
           body="Use analyzed games and mistakes for the richest coach responses."
         />
-      )}
+      ) : null}
     </AppShell>
   );
 }
@@ -387,7 +388,18 @@ const styles = StyleSheet.create({
     paddingTop: 14,
   },
   answerPanel: {
-    marginBottom: 10,
+    backgroundColor: "rgba(215, 179, 90, 0.13)",
+    borderColor: "rgba(215, 179, 90, 0.35)",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+    padding: 12,
+  },
+  answerLabel: {
+    color: palette.gold,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
   },
   answerText: {
     color: palette.ink,
