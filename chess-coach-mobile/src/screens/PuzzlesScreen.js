@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Alert, Keyboard, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { api } from "../api/client";
 import ChessboardWithArrows from "../components/ChessboardWithArrows";
 import {
@@ -352,14 +352,16 @@ export default function PuzzlesScreen({ showBack = true }) {
     }
 
     try {
+      Keyboard.dismiss();
       setCoachLoadingByPuzzle((current) => ({ ...current, [puzzle.id]: true }));
       const response = await api.post(`/puzzles/${puzzle.id}/ask`, {
         question,
         current_move: moves[puzzle.id] || null,
       });
+      const answer = response.data?.answer?.trim();
       setCoachAnswerByPuzzle((current) => ({
         ...current,
-        [puzzle.id]: response.data?.answer || "",
+        [puzzle.id]: answer || "The coach returned an empty response. Try asking again with a more specific question.",
       }));
     } catch (error) {
       Alert.alert(
@@ -625,6 +627,12 @@ export default function PuzzlesScreen({ showBack = true }) {
 
                 <View style={styles.askCoachPanel}>
                   <Text style={styles.askCoachTitle}>Ask Coach</Text>
+                  {coachAnswerByPuzzle[puzzle.id] ? (
+                    <View style={styles.coachAnswerPanel}>
+                      <Text style={styles.coachAnswerLabel}>Coach answer</Text>
+                      <Text style={styles.coachAnswerText}>{coachAnswerByPuzzle[puzzle.id]}</Text>
+                    </View>
+                  ) : null}
                   <TextInput
                     style={[uiStyles.input, styles.askCoachInput]}
                     placeholder="Ask why the engine prefers this move..."
@@ -645,12 +653,6 @@ export default function PuzzlesScreen({ showBack = true }) {
                     onPress={() => askPuzzleCoach(puzzle)}
                     disabled={coachLoadingByPuzzle[puzzle.id]}
                   />
-                  {coachAnswerByPuzzle[puzzle.id] ? (
-                    <View style={styles.coachAnswerPanel}>
-                      <Text style={styles.coachAnswerLabel}>Coach answer</Text>
-                      <Text style={styles.coachAnswerText}>{coachAnswerByPuzzle[puzzle.id]}</Text>
-                    </View>
-                  ) : null}
                 </View>
 
                 <PrimaryButton
