@@ -6,63 +6,82 @@ ENDGAME_TEMPLATES = [
         "key": "king_pawn_vs_king",
         "title": "King + Pawn vs King",
         "category": "Pawn Endgame",
-        "goal": "Win in 10 moves",
-        "max_moves": 10,
-        "start_fen": "8/8/4k3/8/8/3K4/4P3/8 w - - 0 1",
+        "goal": "Promote the passed pawn",
+        "max_moves": 1,
+        "start_fen": "2k5/4P3/3K4/8/8/8/8/8 w - - 0 1",
         "user_color": "white",
         "difficulty": "easy",
-        "description": "Use king activity and pawn timing to convert a simple extra pawn.",
-        "line": ["e2e4", "e6e5", "d3e3", "e5e6", "e3f4", "e6f6", "e4e5"],
+        "description": "Use the king's support to queen the pawn cleanly.",
+        "line": ["e7e8q"],
     },
     {
         "key": "lucena_position",
         "title": "Lucena Position",
         "category": "Rook Endgame",
-        "goal": "Build the bridge in 10 moves",
-        "max_moves": 10,
-        "start_fen": "8/5R2/8/8/8/8/4K1k1/4R3 w - - 0 1",
+        "goal": "Build the bridge",
+        "max_moves": 3,
+        "start_fen": "4K3/3RP1k1/8/8/8/8/r7/8 w - - 0 1",
         "user_color": "white",
         "difficulty": "hard",
-        "description": "Practice the classic bridge-building technique in rook endings.",
-        "line": ["f7f4", "g2g3", "e1g1", "g3h3", "f4f8"],
+        "description": "Lift the rook so checks can be blocked and the pawn can promote.",
+        "line": ["d7d4", "a2a8", "e8d7", "a8a7", "d7c6"],
     },
     {
         "key": "philidor_position",
         "title": "Philidor Position",
         "category": "Rook Endgame",
-        "goal": "Hold the draw in 10 moves",
-        "max_moves": 10,
-        "start_fen": "8/8/8/4K3/8/8/4k3/R6r b - - 0 1",
+        "goal": "Hold with active checks",
+        "max_moves": 3,
+        "start_fen": "8/8/4k2r/4P3/4K3/8/8/4R3 b - - 0 1",
         "user_color": "black",
         "difficulty": "hard",
-        "description": "Defend actively with rook checks and keep the king contained.",
-        "line": ["h1e1", "e5d4", "e1d1", "d4c3", "d1c1"],
+        "description": "Switch from passive waiting to checking once the pawn advances.",
+        "line": ["h6h4", "e4f3", "h4h1", "f3g3", "h1e1"],
     },
     {
         "key": "queen_mate",
         "title": "Queen Mate",
         "category": "Checkmate Pattern",
-        "goal": "Mate with queen support in 10 moves",
-        "max_moves": 10,
-        "start_fen": "6k1/8/8/8/8/8/5Q2/6K1 w - - 0 1",
+        "goal": "Deliver mate without stalemate",
+        "max_moves": 1,
+        "start_fen": "7k/5K2/6Q1/8/8/8/8/8 w - - 0 1",
         "user_color": "white",
         "difficulty": "medium",
-        "description": "Coordinate queen and king, force the defender back, and avoid stalemate habits.",
-        "line": ["f2f7", "g8h8", "f7f8", "h8h7", "f8f7"],
+        "description": "Keep the king boxed in and finish with a protected queen net.",
+        "line": ["g6g8"],
     },
     {
         "key": "rook_mate",
         "title": "Rook Mate",
         "category": "Checkmate Pattern",
-        "goal": "Mate with rook support in 10 moves",
-        "max_moves": 10,
-        "start_fen": "6k1/8/8/8/8/8/5R2/6K1 w - - 0 1",
+        "goal": "Deliver mate with king support",
+        "max_moves": 1,
+        "start_fen": "7k/5K2/6R1/8/8/8/8/8 w - - 0 1",
         "user_color": "white",
         "difficulty": "medium",
-        "description": "Use the rook to cut off the king and bring your own king closer.",
-        "line": ["f2f8", "g8g7", "f8f7", "g7g6", "f7f3"],
+        "description": "Use the king to cover escape squares while the rook gives mate.",
+        "line": ["g6h6"],
     },
 ]
+
+
+def validate_endgame_templates() -> None:
+    for template in ENDGAME_TEMPLATES:
+        board = chess.Board(template["start_fen"])
+        expected_turn = chess.WHITE if template["user_color"] == "white" else chess.BLACK
+        if board.turn != expected_turn:
+            raise ValueError(f"{template['key']} starts with the wrong side to move")
+
+        for ply_index, move_uci in enumerate(template["line"]):
+            move = chess.Move.from_uci(move_uci)
+            if move not in board.legal_moves:
+                raise ValueError(
+                    f"{template['key']} has illegal move {move_uci} at ply {ply_index}"
+                )
+            board.push(move)
+
+
+validate_endgame_templates()
 
 
 def public_template(template: dict) -> dict:
