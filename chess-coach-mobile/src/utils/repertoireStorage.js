@@ -1,11 +1,29 @@
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 const REPERTOIRE_KEY = "saved_opening_repertoire";
 const ADAPTIVE_PROGRESS_KEY = "opening_adaptive_progress";
 
+async function getStoredValue(key) {
+  if (Platform.OS === "web") {
+    return localStorage.getItem(key);
+  }
+
+  return SecureStore.getItemAsync(key);
+}
+
+async function setStoredValue(key, value) {
+  if (Platform.OS === "web") {
+    localStorage.setItem(key, value);
+    return;
+  }
+
+  await SecureStore.setItemAsync(key, value);
+}
+
 export async function getSavedRepertoire() {
   try {
-    const stored = await SecureStore.getItemAsync(REPERTOIRE_KEY);
+    const stored = await getStoredValue(REPERTOIRE_KEY);
     const parsed = stored ? JSON.parse(stored) : [];
 
     return Array.isArray(parsed) ? parsed : [];
@@ -16,7 +34,7 @@ export async function getSavedRepertoire() {
 
 export async function saveRepertoire(openings) {
   const uniqueOpenings = [...new Set(openings)].sort();
-  await SecureStore.setItemAsync(REPERTOIRE_KEY, JSON.stringify(uniqueOpenings));
+  await setStoredValue(REPERTOIRE_KEY, JSON.stringify(uniqueOpenings));
   return uniqueOpenings;
 }
 
@@ -35,7 +53,7 @@ export async function toggleSavedOpening(openingName) {
 
 export async function getOpeningProgress() {
   try {
-    const stored = await SecureStore.getItemAsync(ADAPTIVE_PROGRESS_KEY);
+    const stored = await getStoredValue(ADAPTIVE_PROGRESS_KEY);
     const parsed = stored ? JSON.parse(stored) : {};
 
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
@@ -45,7 +63,7 @@ export async function getOpeningProgress() {
 }
 
 export async function saveOpeningProgress(progress) {
-  await SecureStore.setItemAsync(ADAPTIVE_PROGRESS_KEY, JSON.stringify(progress));
+  await setStoredValue(ADAPTIVE_PROGRESS_KEY, JSON.stringify(progress));
   return progress;
 }
 

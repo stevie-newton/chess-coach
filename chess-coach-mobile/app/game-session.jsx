@@ -699,9 +699,11 @@ export default function GameSession() {
             arrows={lastAiMove ? [{ from: lastAiMove.slice(0, 2), to: lastAiMove.slice(2, 4), color: "rgba(46, 125, 136, 0.82)" }] : []}
           />
         </View>
-        <Text style={styles.sideText}>
-          {game.in_checkmate() ? "Checkmate" : game.in_check() ? "Check on the board" : "Legal moves enforced"}
-        </Text>
+        {game.in_checkmate() || game.in_check() ? (
+          <Text style={styles.sideText}>
+            {game.in_checkmate() ? "Checkmate" : "Check on the board"}
+          </Text>
+        ) : null}
         <View style={styles.manualRow}>
           <TextInput
             style={[uiStyles.input, styles.manualInput]}

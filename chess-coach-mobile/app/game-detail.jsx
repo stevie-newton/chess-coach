@@ -94,14 +94,22 @@ export default function GameDetail() {
   }, [isPlaying, positions.length]);
 
   const analyzedCount = positions.length;
+  const positionId = (position) => position?.move_id ?? position?.id;
   const mistakeCount = mistakes.length || positions.filter((position) => badMoveTypes.includes(position.mistake_type)).length;
   const blunderCount = analysis?.blunders ?? positions.filter((position) => position.mistake_type === "blunder").length;
   const mistakeOnlyCount = analysis?.mistakes ?? positions.filter((position) => position.mistake_type === "mistake").length;
   const accuracy = analysis?.accuracy ?? (positions.length > 0 ? Math.round(((positions.length - mistakeCount) / positions.length) * 100) : null);
   const bestMovesFound = analysis?.best_moves_found ?? positions.filter((position) => position.mistake_type === "good").length;
   const tacticalMisses = positions.filter((position) => position.tactical_miss);
+  const mistakePositions = positions.filter((position) => badMoveTypes.includes(position.mistake_type));
   const replayPosition = positions[replayIndex] || mistakes[0] || positions.find((position) => position.fen_before) || null;
-
+  const currentMistakeIndex = mistakePositions.findIndex(
+    (position) => positionId(position) === positionId(replayPosition)
+  );
+  const nextMistakeTitle =
+    currentMistakeIndex >= 0 && currentMistakeIndex < mistakePositions.length - 1
+      ? "Next mistake"
+      : "First mistake";
   const moveToArrow = (uci, color) => {
     if (!uci || uci.length < 4) {
       return null;
@@ -143,18 +151,33 @@ export default function GameDetail() {
   };
 
   const jumpToPosition = (moveId) => {
-    const nextIndex = positions.findIndex((position) => position.move_id === moveId);
+    const nextIndex = positions.findIndex((position) => positionId(position) === moveId);
 
     if (nextIndex >= 0) {
       goToReplayIndex(nextIndex);
     }
   };
 
-  const jumpToFirstMistake = () => {
-    const firstMistake = positions.find((position) => badMoveTypes.includes(position.mistake_type));
+  const jumpToNextMistake = () => {
+    if (!mistakePositions.length) {
+      return;
+    }
 
-    if (firstMistake) {
-      jumpToPosition(firstMistake.move_id);
+    if (currentMistakeIndex >= 0) {
+      const nextIndex = (currentMistakeIndex + 1) % mistakePositions.length;
+      jumpToPosition(positionId(mistakePositions[nextIndex]));
+      return;
+    }
+
+    const nextMistake = mistakePositions.find((position) => {
+      const positionIndex = positions.findIndex((item) => positionId(item) === positionId(position));
+      return positionIndex >= replayIndex;
+    });
+
+    if (nextMistake) {
+      jumpToPosition(positionId(nextMistake));
+    } else {
+      jumpToPosition(positionId(mistakePositions[0]));
     }
   };
 
@@ -299,13 +322,18 @@ export default function GameDetail() {
             <Text style={styles.replayCount}>
               Position {Math.min(replayIndex + 1, positions.length || 1)} of {positions.length || 1}
             </Text>
-            {mistakeCount > 0 ? (
+            {mistakePositions.length > 0 ? (
               <SecondaryButton
-                title="First mistake"
+                title={nextMistakeTitle}
                 icon="alert-octagon"
                 style={styles.jumpButton}
-                onPress={jumpToFirstMistake}
+                onPress={jumpToNextMistake}
               />
+            ) : null}
+            {currentMistakeIndex >= 0 ? (
+              <Text style={styles.replayCount}>
+                Mistake {currentMistakeIndex + 1} of {mistakePositions.length}
+              </Text>
             ) : null}
           </View>
         </PremiumPanel>
@@ -320,7 +348,7 @@ export default function GameDetail() {
       <SectionHeader label="Explain Mistakes" />
       {mistakes.length > 0 ? (
         mistakes.map((mistake) => (
-          <PremiumPanel key={mistake.move_id} style={[styles.itemCard, mistake.tactical_miss && styles.tacticalCard]}>
+          <PremiumPanel key={positionId(mistake)} style={[styles.itemCard, mistake.tactical_miss && styles.tacticalCard]}>
             <View style={styles.itemTop}>
               <Text style={styles.itemTitle}>
                 Move {mistake.move_number} {mistake.color}
@@ -337,7 +365,7 @@ export default function GameDetail() {
               title="Show on board"
               icon="chess-board"
               style={styles.inlineButton}
-              onPress={() => jumpToPosition(mistake.move_id)}
+              onPress={() => jumpToPosition(positionId(mistake))}
             />
           </PremiumPanel>
         ))
@@ -352,7 +380,7 @@ export default function GameDetail() {
       <SectionHeader label="Tactical Misses" />
       {tacticalMisses.length > 0 ? (
         tacticalMisses.map((position) => (
-          <PremiumPanel key={`tactical-${position.move_id}`} style={[styles.itemCard, styles.tacticalCard]}>
+          <PremiumPanel key={`tactical-${positionId(position)}`} style={[styles.itemCard, styles.tacticalCard]}>
             <View style={styles.itemTop}>
               <Text style={styles.itemTitle}>
                 Move {position.move_number} {position.color}
@@ -366,7 +394,7 @@ export default function GameDetail() {
               title="Review tactic"
               icon="crosshairs-gps"
               style={styles.inlineButton}
-              onPress={() => jumpToPosition(position.move_id)}
+              onPress={() => jumpToPosition(positionId(position))}
             />
           </PremiumPanel>
         ))
@@ -381,7 +409,7 @@ export default function GameDetail() {
       <SectionHeader label="Move-By-Move Review" />
       {positions.length > 0 ? (
         positions.map((position) => (
-          <PremiumPanel key={position.move_id} style={[styles.itemCard, position.tactical_miss && styles.tacticalCard]}>
+          <PremiumPanel key={positionId(position)} style={[styles.itemCard, position.tactical_miss && styles.tacticalCard]}>
             <View style={styles.itemTop}>
               <Text style={styles.itemTitle}>
                 Move {position.move_number} {position.color}
@@ -401,7 +429,7 @@ export default function GameDetail() {
               title="Show on board"
               icon="chess-board"
               style={styles.inlineButton}
-              onPress={() => jumpToPosition(position.move_id)}
+              onPress={() => jumpToPosition(positionId(position))}
             />
           </PremiumPanel>
         ))

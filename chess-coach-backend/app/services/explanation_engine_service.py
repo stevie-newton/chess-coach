@@ -323,6 +323,47 @@ def _extract_output_text(data: dict) -> str:
     return "\n".join(chunks).strip()
 
 
+def _fallback_puzzle_coach_answer(
+    puzzle: Puzzle,
+    question: str,
+    current_move: str | None = None,
+    solution_line: list[dict] | None = None,
+    coach_personality: str | None = None,
+) -> str:
+    try:
+        board = chess.Board(puzzle.fen)
+        side_to_move = "White" if board.turn == chess.WHITE else "Black"
+        best_move = chess.Move.from_uci(puzzle.solution)
+        best_move_label = board.san(best_move) if best_move in board.legal_moves else puzzle.solution
+        best_move_reason = _move_reason(board, puzzle.solution)
+    except ValueError:
+        side_to_move = "the side to move"
+        best_move_label = puzzle.solution
+        best_move_reason = "The saved board position could not be checked locally."
+
+    selected_move_note = ""
+    if current_move:
+        try:
+            selected_move_note = f" Your selected move: {_move_reason(chess.Board(puzzle.fen), current_move)}"
+        except ValueError:
+            selected_move_note = " I could not read the selected move from the board."
+
+    line_note = ""
+    if solution_line:
+        line_moves = [move.get("san") or move.get("uci") for move in solution_line[:4]]
+        line_note = f" A useful continuation starts: {' '.join(line_moves)}."
+
+    prompt_note = ""
+    if len(question.strip().split()) <= 5:
+        prompt_note = " Ask me about a candidate move or threat and I can be more specific."
+
+    return (
+        f"{coach_voice(coach_personality)['label']}: yes. {side_to_move} is to move, "
+        f"and the key move is {best_move_label}. {best_move_reason}"
+        f"{selected_move_note}{line_note}{prompt_note}"
+    )
+
+
 def ask_puzzle_coach(
     puzzle: Puzzle,
     question: str,
@@ -333,7 +374,13 @@ def ask_puzzle_coach(
     coach_personality: str | None = None,
 ) -> str | None:
     if not settings.OPENAI_API_KEY:
-        return None
+        return _fallback_puzzle_coach_answer(
+            puzzle=puzzle,
+            question=question,
+            current_move=current_move,
+            solution_line=solution_line,
+            coach_personality=coach_personality,
+        )
 
     try:
         board = chess.Board(puzzle.fen)
@@ -424,9 +471,21 @@ def ask_puzzle_coach(
         )
         response.raise_for_status()
     except requests.RequestException:
-        return None
+        return _fallback_puzzle_coach_answer(
+            puzzle=puzzle,
+            question=question,
+            current_move=current_move,
+            solution_line=solution_line,
+            coach_personality=coach_personality,
+        )
 
-    return _extract_output_text(response.json()) or None
+    return _extract_output_text(response.json()) or _fallback_puzzle_coach_answer(
+        puzzle=puzzle,
+        question=question,
+        current_move=current_move,
+        solution_line=solution_line,
+        coach_personality=coach_personality,
+    )
 
 
 def explain_puzzle_attempt(

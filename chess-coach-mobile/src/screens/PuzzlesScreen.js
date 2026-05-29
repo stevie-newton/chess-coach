@@ -364,10 +364,12 @@ export default function PuzzlesScreen({ showBack = true }) {
         [puzzle.id]: answer || "The coach returned an empty response. Try asking again with a more specific question.",
       }));
     } catch (error) {
-      Alert.alert(
-        "Coach unavailable",
-        error.response?.data?.detail || "Could not answer this puzzle question"
-      );
+      const message = error.response?.data?.detail || "Could not answer this puzzle question";
+      setCoachAnswerByPuzzle((current) => ({
+        ...current,
+        [puzzle.id]: message,
+      }));
+      Alert.alert("Coach unavailable", message);
     } finally {
       setCoachLoadingByPuzzle((current) => ({ ...current, [puzzle.id]: false }));
     }
