@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.game import Game
 from app.models.analysis import GameAnalysis, MoveAnalysis
 from app.services.game_analysis_service import analyze_game_and_save
+from app.services.focus_analysis_service import build_focused_review, focus_from_game, focus_note_for_move, is_focus_move
 from app.services.puzzle_service import generate_puzzles_from_game, personalized_training_focus
 
 
@@ -47,9 +48,10 @@ def tactical_miss_reason(mistake_type: str | None, best_move_san_value: str | No
     return f"Tactical miss: {best_move_san_value} was the critical resource."
 
 
-def serialize_move_analysis(move: MoveAnalysis):
+def serialize_move_analysis(move: MoveAnalysis, focus: str = "practice"):
     best_san = best_move_san(move.fen_before, move.best_move)
     tactical_reason = tactical_miss_reason(move.mistake_type, best_san)
+    focus_note = focus_note_for_move(move, focus)
 
     return {
         "id": move.id,
@@ -65,6 +67,8 @@ def serialize_move_analysis(move: MoveAnalysis):
         "mistake_type": move.mistake_type,
         "tactical_miss": tactical_reason is not None,
         "tactical_miss_reason": tactical_reason,
+        "focus_relevant": is_focus_move(move, focus),
+        "focus_note": focus_note,
         "explanation": move.explanation,
     }
 
@@ -92,6 +96,12 @@ def analyze_game(
         user_id=current_user.id,
         game=game
     )
+    moves = (
+        db.query(MoveAnalysis)
+        .filter(MoveAnalysis.game_id == game.id)
+        .order_by(MoveAnalysis.id.asc())
+        .all()
+    )
     generated_puzzles = generate_puzzles_from_game(
         db=db,
         user_id=current_user.id,
@@ -112,6 +122,7 @@ def analyze_game(
         "best_moves_found": analysis.best_moves_found,
         "generated_puzzles": len(generated_puzzles),
         "personalized_training_focus": focus,
+        "focused_review": build_focused_review(game, moves),
     }
 
 
@@ -152,6 +163,8 @@ def get_analysis(
             detail="Analysis not found"
         )
 
+    focus = focus_from_game(game)
+
     return {
         "id": analysis.id,
         "game_id": game.id,
@@ -160,5 +173,6 @@ def get_analysis(
         "mistakes": analysis.mistakes,
         "blunders": analysis.blunders,
         "best_moves_found": analysis.best_moves_found,
-        "moves": [serialize_move_analysis(move) for move in moves]
+        "focused_review": build_focused_review(game, moves),
+        "moves": [serialize_move_analysis(move, focus) for move in moves]
     }

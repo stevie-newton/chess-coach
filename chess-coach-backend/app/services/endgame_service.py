@@ -157,6 +157,27 @@ def evaluate_endgame_move(template_key: str, ply_index: int, user_move: str, pre
     mistakes = previous_mistakes if is_correct else previous_mistakes + 1
     user_san = board.san(parsed_user_move)
     expected_san = board.san(expected_move)
+
+    if not is_correct:
+        precision = max(0, 100 - mistakes * 18)
+        efficiency = max(0, 100 - bounded_ply * 8 - mistakes * 8)
+        return {
+            **public_template(template),
+            "is_legal": True,
+            "is_correct": False,
+            "message": "Imprecise endgame move",
+            "feedback": f"{user_san} is legal, but {expected_san} is the precise conversion move. Try the shown move to continue.",
+            "precision": precision,
+            "efficiency": efficiency,
+            "mistakes": mistakes,
+            "user_move": parsed_user_move.uci(),
+            "expected_move": expected_move_uci,
+            "ai_reply": None,
+            "next_ply_index": bounded_ply,
+            "fen": board.fen(),
+            "completed": False,
+        }
+
     board.push(parsed_user_move)
     next_ply = bounded_ply + 1
     ai_reply = None
@@ -176,7 +197,7 @@ def evaluate_endgame_move(template_key: str, ply_index: int, user_move: str, pre
             board = reply_board
             next_ply += 1
 
-    completed = next_ply >= len(line) and is_correct
+    completed = next_ply >= len(line)
     user_moves_used = (next_ply + 1) // 2
     precision = max(0, 100 - mistakes * 18)
     efficiency = max(0, 100 - max(0, user_moves_used - template["max_moves"]) * 12 - mistakes * 8)
@@ -185,12 +206,8 @@ def evaluate_endgame_move(template_key: str, ply_index: int, user_move: str, pre
         **public_template(template),
         "is_legal": True,
         "is_correct": is_correct,
-        "message": "Precise endgame move" if is_correct else "Imprecise endgame move",
-        "feedback": (
-            f"{user_san} is the practical move. Keep converting efficiently."
-            if is_correct
-            else f"{user_san} is legal, but {expected_san} is the precise conversion move."
-        ),
+        "message": "Precise endgame move",
+        "feedback": f"{user_san} is the practical move. Keep converting efficiently.",
         "precision": precision,
         "efficiency": efficiency,
         "mistakes": mistakes,

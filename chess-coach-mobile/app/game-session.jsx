@@ -15,20 +15,25 @@ import {
 } from "../src/components/PremiumUI";
 import { api } from "../src/api/client";
 
-const sessionTypes = [
-  { label: "Practice", value: "practice" },
-  { label: "Tournament simulation", value: "tournament_simulation" },
-  { label: "Opening training", value: "opening_training" },
-  { label: "Endgame training", value: "endgame_training" },
-  { label: "Tactics training", value: "tactics_training" },
+const studyFocuses = [
+  { label: "General practice", value: "practice" },
+  { label: "Tournament habits", value: "tournament_simulation" },
+  { label: "Opening focus", value: "opening_training" },
+  { label: "Endgame focus", value: "endgame_training" },
+  { label: "Tactics focus", value: "tactics_training" },
 ];
-const timeControls = ["10+0", "15+10", "30+0", "Classical"];
+const timeControls = [
+  { label: "10 min", value: "10+0" },
+  { label: "15 min + 10s", value: "15+10" },
+  { label: "30 min", value: "30+0" },
+  { label: "90 min + 30s", value: "Classical" },
+];
 const colors = ["White", "Black", "Random"];
 const results = ["*", "1-0", "0-1", "1/2-1/2"];
 const playModes = [
-  { label: "AI opponent", value: "ai" },
-  { label: "Training game", value: "training" },
-  { label: "Record PGN", value: "record" },
+  { label: "Coach game", value: "ai" },
+  { label: "Guided game", value: "training" },
+  { label: "PGN recorder", value: "record" },
 ];
 const aiLevels = [
   { label: "Calm", value: "calm" },
@@ -229,9 +234,9 @@ function buildMistakeSignal(moves, playerColor) {
   return { label: "Stable", tone: "stable", detail: "No obvious material mistake detected locally." };
 }
 
-function buildPgn({ moves, sessionType, timeControl, color, playerColor, result, opponent }) {
+function buildPgn({ moves, studyFocus, timeControl, color, playerColor, result, opponent }) {
   const game = createGameFromMoves(moves);
-  const sessionLabel = sessionTypes.find((type) => type.value === sessionType)?.label || sessionType;
+  const sessionLabel = studyFocuses.find((focus) => focus.value === studyFocus)?.label || studyFocus;
   const resolvedPlayerColor = color === "Random" ? playerColor : color === "Black" ? "b" : "w";
   const white = resolvedPlayerColor === "b" ? opponent || "Training Opponent" : "Chess Coach Player";
   const black = resolvedPlayerColor === "b" ? "Chess Coach Player" : opponent || "Training Opponent";
@@ -280,8 +285,8 @@ function SegmentedOptions({ label, options, value, onChange }) {
 
 export default function GameSession() {
   const [playMode, setPlayMode] = useState(playModes[0].value);
-  const [sessionType, setSessionType] = useState(sessionTypes[0].value);
-  const [timeControl, setTimeControl] = useState(timeControls[0]);
+  const [studyFocus, setStudyFocus] = useState(studyFocuses[0].value);
+  const [timeControl, setTimeControl] = useState(timeControls[0].value);
   const [color, setColor] = useState(colors[0]);
   const [playerColor, setPlayerColor] = useState("w");
   const [aiLevel, setAiLevel] = useState(aiLevels[1].value);
@@ -308,7 +313,7 @@ export default function GameSession() {
   const game = useMemo(() => createGameFromMoves(moves), [moves]);
   const fen = game.fen();
   const finalResult = getGameResult(game, result);
-  const pgn = buildPgn({ moves, sessionType, timeControl, color, playerColor, result: finalResult, opponent });
+  const pgn = buildPgn({ moves, studyFocus, timeControl, color, playerColor, result: finalResult, opponent });
   const legalMoves = game.moves({ verbose: true });
   const history = useMemo(() => getHistory(moves), [moves]);
   const movePairs = [];
@@ -565,7 +570,7 @@ export default function GameSession() {
     try {
       setBusyAction("save");
       const response = await api.post("/games/upload-pgn", {
-        source: `training-session:${sessionType}`,
+        source: `training-session:${studyFocus}`,
         opponent: opponent || (playMode === "record" ? "Training Opponent" : "Chess Coach AI"),
         color_played: playerColor === "w" ? "white" : "black",
         result: finalResult,
@@ -648,8 +653,8 @@ export default function GameSession() {
     <AppShell
       showBack
       eyebrow="Game Session"
-      title="Play, save, analyze."
-      subtitle="Play against the coach AI, run a training game, export PGN, then turn mistakes into follow-up work."
+      title="Practice game."
+      subtitle="Play a full game, choose a study focus, then save and analyze the PGN for follow-up work."
     >
       <View style={styles.statsRow}>
         <StatPill icon="timer-outline" value={formatClock(clock.w)} label="white clock" tone="gold" />
@@ -659,8 +664,8 @@ export default function GameSession() {
 
       <SectionHeader label="Session Setup" />
       <PremiumPanel style={styles.setupPanel}>
-        <SegmentedOptions label="Mode" options={playModes} value={playMode} onChange={setPlayMode} />
-        <SegmentedOptions label="Session type" options={sessionTypes} value={sessionType} onChange={setSessionType} />
+        <SegmentedOptions label="Game type" options={playModes} value={playMode} onChange={setPlayMode} />
+        <SegmentedOptions label="Study focus" options={studyFocuses} value={studyFocus} onChange={setStudyFocus} />
         <SegmentedOptions label="Time control" options={timeControls} value={timeControl} onChange={setTimeControl} />
         <SegmentedOptions label="Color" options={colors} value={color} onChange={setColor} />
         {playMode !== "record" ? (
@@ -787,6 +792,11 @@ export default function GameSession() {
         {analysis ? (
           <Text style={styles.pipelineText}>
             Analysis: {analysis.accuracy}% accuracy, {analysis.blunders} blunders, {analysis.mistakes} mistakes, {analysis.best_moves_found} best moves
+          </Text>
+        ) : null}
+        {analysis?.focused_review ? (
+          <Text style={styles.pipelineText}>
+            {analysis.focused_review.label}: {analysis.focused_review.accuracy}% over {analysis.focused_review.reviewed_moves} focus moves. {analysis.focused_review.summary}
           </Text>
         ) : null}
         {puzzleCount !== null ? <Text style={styles.pipelineText}>Generated puzzles: {puzzleCount}</Text> : null}

@@ -36,6 +36,7 @@ export default function Endgames() {
   const [mistakes, setMistakes] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [boardResetToken, setBoardResetToken] = useState(0);
 
   useEffect(() => {
     async function loadEndgames() {
@@ -65,6 +66,7 @@ export default function Endgames() {
     setStagedMove("");
     setResult(null);
     setMistakes(0);
+    setBoardResetToken((token) => token + 1);
   };
 
   const submitMove = async () => {
@@ -85,6 +87,9 @@ export default function Endgames() {
       setPlyIndex(response.data.next_ply_index);
       setMistakes(response.data.mistakes);
       setStagedMove("");
+      if (!response.data.is_correct) {
+        setBoardResetToken((token) => token + 1);
+      }
     } catch (error) {
       Alert.alert(
         "Endgame move failed",
@@ -177,6 +182,7 @@ export default function Endgames() {
                   withNumbers
                   onMove={setStagedMove}
                   arrows={arrows}
+                  resetToken={boardResetToken}
                 />
               </View>
 

@@ -100,6 +100,7 @@ export default function GameDetail() {
   const mistakeOnlyCount = analysis?.mistakes ?? positions.filter((position) => position.mistake_type === "mistake").length;
   const accuracy = analysis?.accuracy ?? (positions.length > 0 ? Math.round(((positions.length - mistakeCount) / positions.length) * 100) : null);
   const bestMovesFound = analysis?.best_moves_found ?? positions.filter((position) => position.mistake_type === "good").length;
+  const focusedReview = analysis?.focused_review;
   const tacticalMisses = positions.filter((position) => position.tactical_miss);
   const mistakePositions = positions.filter((position) => badMoveTypes.includes(position.mistake_type));
   const replayPosition = positions[replayIndex] || mistakes[0] || positions.find((position) => position.fen_before) || null;
@@ -240,6 +241,15 @@ export default function GameDetail() {
             ? `${analyzedCount} analyzed moves, ${mistakeCount} review targets, ${tacticalMisses.length} tactical misses.`
             : "Analyze this game to unlock the move-by-move review."}
         </Text>
+        {focusedReview ? (
+          <View style={styles.focusBox}>
+            <Text style={styles.focusTitle}>{focusedReview.label}</Text>
+            <Text style={styles.summaryLine}>
+              {focusedReview.accuracy}% over {focusedReview.reviewed_moves} focus moves, with {focusedReview.mistakes} focus mistakes.
+            </Text>
+            <Text style={styles.focusText}>{focusedReview.summary}</Text>
+          </View>
+        ) : null}
       </PremiumPanel>
 
       <SectionHeader label="Board Replay" action="Preview" />
@@ -360,6 +370,9 @@ export default function GameDetail() {
             {mistake.tactical_miss_reason ? (
               <Text style={styles.tacticalText}>{mistake.tactical_miss_reason}</Text>
             ) : null}
+            {mistake.focus_note ? (
+              <Text style={styles.focusText}>{mistake.focus_note}</Text>
+            ) : null}
             <Text style={styles.explanation}>{mistake.explanation || "No explanation yet."}</Text>
             <SecondaryButton
               title="Show on board"
@@ -390,6 +403,9 @@ export default function GameDetail() {
             <Text style={styles.mutedText}>Played: {position.played_move || "Unknown"}</Text>
             <Text style={styles.bestMoveText}>Best move: {position.best_move_san || position.best_move || "Unknown"}</Text>
             <Text style={styles.tacticalText}>{position.tactical_miss_reason}</Text>
+            {position.focus_note ? (
+              <Text style={styles.focusText}>{position.focus_note}</Text>
+            ) : null}
             <SecondaryButton
               title="Review tactic"
               icon="crosshairs-gps"
@@ -420,6 +436,9 @@ export default function GameDetail() {
             <Text style={styles.bestMoveText}>Best move: {position.best_move_san || position.best_move || "Unknown"}</Text>
             {position.tactical_miss_reason ? (
               <Text style={styles.tacticalText}>{position.tactical_miss_reason}</Text>
+            ) : null}
+            {position.focus_note ? (
+              <Text style={styles.focusText}>{position.focus_note}</Text>
             ) : null}
             <Text style={styles.explanation}>{position.explanation || "No explanation yet."}</Text>
             <Text style={styles.mutedText}>
@@ -474,6 +493,26 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontSize: 14,
     lineHeight: 21,
+  },
+  focusBox: {
+    backgroundColor: "rgba(15,17,21,0.58)",
+    borderColor: "rgba(215,179,90,0.42)",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+    padding: 12,
+  },
+  focusTitle: {
+    color: palette.gold,
+    fontSize: 14,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  focusText: {
+    color: palette.goldSoft,
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 19,
   },
   reportGrid: {
     flexDirection: "row",

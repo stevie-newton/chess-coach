@@ -12,23 +12,33 @@ import {
   palette,
 } from "../components/PremiumUI";
 
-const trainingCategories = [
+const playTraining = [
   {
-    title: "Tactics",
+    title: "Practice Game",
+    subtitle: "Play a full coach game, then save, analyze, and turn it into review work.",
+    icon: "chess-board",
+    accent: palette.sage,
+    href: "/game-session",
+  },
+];
+
+const skillDrills = [
+  {
+    title: "Tactics Trainer",
     subtitle: "Solve generated tactical positions and sharpen forcing moves.",
     icon: "puzzle",
     accent: palette.gold,
     href: "/(tabs)/puzzles",
   },
   {
-    title: "Openings",
+    title: "Opening Trainer",
     subtitle: "Build a repertoire, study lines, and drill recall from your board.",
     icon: "book-open-page-variant",
     accent: palette.teal,
     href: "/openings",
   },
   {
-    title: "Endgames",
+    title: "Endgame Trainer",
     subtitle: "Practice conversion, opposition, pawn races, and technical saves.",
     icon: "chess-king",
     accent: palette.sage,
@@ -55,6 +65,9 @@ const trainingCategories = [
     accent: palette.teal,
     href: "/calculation-training",
   },
+];
+
+const reviewAndPlanning = [
   {
     title: "AI Coach Analysis",
     subtitle: "Ask the coach to explain mistakes, plans, and next study blocks.",
@@ -70,6 +83,8 @@ const trainingCategories = [
     href: "/study-schedule",
   },
 ];
+
+const trainingPathCount = playTraining.length + skillDrills.length + reviewAndPlanning.length;
 
 export default function TrainingScreen({ showBack = false }) {
   const [skillProfile, setSkillProfile] = useState(null);
@@ -93,11 +108,11 @@ export default function TrainingScreen({ showBack = false }) {
     <AppShell
       showBack={showBack}
       eyebrow="Training"
-      title="Choose your training."
-      subtitle="Start with tactics, openings, endgames, positional themes, checkmate patterns, calculation work, coach analysis, or a custom plan."
+      title="Choose a training path."
+      subtitle="Play a full practice game, drill a specific chess skill, or follow the daily plan built from your recent work."
     >
       <View style={styles.statsRow}>
-        <StatPill icon="target" value="8" label="categories" tone="gold" />
+        <StatPill icon="target" value={trainingPathCount} label="paths" tone="gold" />
         <StatPill icon="school" value={skillProfile?.detected_level || "Detecting"} label="skill" tone="sage" />
       </View>
 
@@ -145,8 +160,32 @@ export default function TrainingScreen({ showBack = false }) {
         />
       </PremiumPanel>
 
-      <SectionHeader label="Training Categories" />
-      {trainingCategories.map((category) => (
+      <SectionHeader label="Play A Game" />
+      {playTraining.map((category) => (
+        <FeatureRow
+          key={category.title}
+          title={category.title}
+          subtitle={category.subtitle}
+          icon={category.icon}
+          accent={category.accent}
+          onPress={() => router.push(category.href)}
+        />
+      ))}
+
+      <SectionHeader label="Focused Drills" />
+      {skillDrills.map((category) => (
+        <FeatureRow
+          key={category.title}
+          title={category.title}
+          subtitle={category.subtitle}
+          icon={category.icon}
+          accent={category.accent}
+          onPress={() => router.push(category.href)}
+        />
+      ))}
+
+      <SectionHeader label="Review And Planning" />
+      {reviewAndPlanning.map((category) => (
         <FeatureRow
           key={category.title}
           title={category.title}

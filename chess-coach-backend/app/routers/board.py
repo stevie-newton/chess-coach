@@ -7,6 +7,7 @@ from app.core.auth_dependency import get_current_user
 from app.models.user import User
 from app.models.game import Game
 from app.models.analysis import MoveAnalysis
+from app.services.focus_analysis_service import focus_from_game, focus_note_for_move, is_focus_move
 from app.services.stockfish_service import best_move_for_fen
 from app.utils.chess_move_utils import parse_uci_move
 import chess
@@ -60,9 +61,10 @@ def tactical_miss_reason(mistake_type: str | None, best_move_san_value: str | No
     return f"Tactical miss: {best_move_san_value} was the critical resource."
 
 
-def serialize_move_analysis(move: MoveAnalysis):
+def serialize_move_analysis(move: MoveAnalysis, focus: str = "practice"):
     best_san = best_move_san(move.fen_before, move.best_move)
     tactical_reason = tactical_miss_reason(move.mistake_type, best_san)
+    focus_note = focus_note_for_move(move, focus)
 
     return {
         "move_id": move.id,
@@ -78,6 +80,8 @@ def serialize_move_analysis(move: MoveAnalysis):
         "mistake_type": move.mistake_type,
         "tactical_miss": tactical_reason is not None,
         "tactical_miss_reason": tactical_reason,
+        "focus_relevant": is_focus_move(move, focus),
+        "focus_note": focus_note,
         "explanation": move.explanation
     }
 
@@ -122,13 +126,15 @@ def get_game_positions(
             detail="No analyzed positions found. Analyze this game first."
         )
 
+    focus = focus_from_game(game)
+
     return {
         "game_id": game.id,
         "source": game.source,
         "opponent": game.opponent,
         "color_played": game.color_played,
         "result": game.result,
-        "positions": [serialize_move_analysis(move) for move in moves]
+        "positions": [serialize_move_analysis(move, focus) for move in moves]
     }
 
 
@@ -160,9 +166,11 @@ def get_game_mistake_positions(
         .all()
     )
 
+    focus = focus_from_game(game)
+
     return {
         "game_id": game.id,
-        "mistakes": [serialize_move_analysis(move) for move in mistakes]
+        "mistakes": [serialize_move_analysis(move, focus) for move in mistakes]
     }
 
 
@@ -188,6 +196,10 @@ def get_move_preview(
             detail="Move analysis not found"
         )
 
+    focus = focus_from_game(move.game)
+    best_san = best_move_san(move.fen_before, move.best_move)
+    tactical_reason = tactical_miss_reason(move.mistake_type, best_san)
+
     return {
         "move_id": move.id,
         "game_id": move.game_id,
@@ -198,11 +210,13 @@ def get_move_preview(
         "played_move_uci": move.played_move_uci,
         "played_move_preview": parse_uci_move(move.played_move_uci),
         "best_move": move.best_move,
-        "best_move_san": best_move_san(move.fen_before, move.best_move),
+        "best_move_san": best_san,
         "best_move_preview": parse_uci_move(move.best_move),
         "mistake_type": move.mistake_type,
-        "tactical_miss": tactical_miss_reason(move.mistake_type, best_move_san(move.fen_before, move.best_move)) is not None,
-        "tactical_miss_reason": tactical_miss_reason(move.mistake_type, best_move_san(move.fen_before, move.best_move)),
+        "tactical_miss": tactical_reason is not None,
+        "tactical_miss_reason": tactical_reason,
+        "focus_relevant": is_focus_move(move, focus),
+        "focus_note": focus_note_for_move(move, focus),
         "evaluation_before": move.evaluation_before,
         "evaluation_after": move.evaluation_after,
         "explanation": move.explanation
