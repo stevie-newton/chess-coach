@@ -110,12 +110,18 @@ function chooseAiMove(game, level) {
   return pick?.move || legalMoves[0];
 }
 
+function getOptionValue(option) {
+  return typeof option === "string" ? option : option?.value;
+}
+
 function parseTimeControl(timeControl) {
-  if (timeControl === "Classical") {
+  const value = getOptionValue(timeControl) || timeControls[0].value;
+
+  if (value === "Classical") {
     return { baseSeconds: 90 * 60, incrementSeconds: 30 };
   }
 
-  const [minutes, increment] = timeControl.split("+").map((value) => Number(value));
+  const [minutes, increment] = value.split("+").map((timePart) => Number(timePart));
   return {
     baseSeconds: Number.isFinite(minutes) ? minutes * 60 : 10 * 60,
     incrementSeconds: Number.isFinite(increment) ? increment : 0,
@@ -266,7 +272,7 @@ function SegmentedOptions({ label, options, value, onChange }) {
       <View style={styles.optionRow}>
         {options.map((option) => {
           const optionLabel = typeof option === "string" ? option : option.label;
-          const optionValue = typeof option === "string" ? option : option.value;
+          const optionValue = getOptionValue(option);
 
           return (
           <SecondaryButton

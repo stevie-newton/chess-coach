@@ -17,9 +17,17 @@ export default function LoginScreen() {
   const { login } = useContext(AuthContext);
 
   const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [password, setPassword] = useState("");
 
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
   const handleLogin = async () => {
+    if (!isValidEmail(email)) {
+      setEmailError("Enter a valid email address.");
+      return;
+    }
+
     try {
       await login(email, password);
       router.replace("/(tabs)/dashboard");
@@ -54,8 +62,14 @@ export default function LoginScreen() {
             autoCapitalize="none"
             keyboardType="email-address"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(value) => {
+              setEmail(value);
+              if (emailError && isValidEmail(value)) {
+                setEmailError("");
+              }
+            }}
           />
+          {emailError ? <Text style={styles.fieldError}>{emailError}</Text> : null}
         </View>
 
         <View style={styles.fieldGroup}>
@@ -120,6 +134,11 @@ const styles = StyleSheet.create({
     color: palette.mutedDark,
     fontSize: 13,
     fontWeight: "900",
+  },
+  fieldError: {
+    color: "#B42318",
+    fontSize: 12,
+    fontWeight: "700",
   },
   linkRow: {
     alignItems: "center",
