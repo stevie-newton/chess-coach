@@ -160,22 +160,113 @@ def _move_features(board: chess.Board, move_uci: str | None) -> dict:
         return {}
 
     captured_piece = board.piece_at(move.to_square)
+    moving_piece = board.piece_at(move.from_square)
     san = board.san(move)
     attacked_targets = _attacked_targets_after(board, move)
     board.push(move)
     gives_check = board.is_check()
     gives_mate = board.is_checkmate()
+    landing_attackers = list(board.attackers(board.turn, move.to_square))
     board.pop()
 
     return {
         "san": san,
+        "uci": move.uci(),
+        "piece": _piece_name(moving_piece),
+        "from_square": _square_name(move.from_square),
+        "to_square": _square_name(move.to_square),
         "is_capture": captured_piece is not None,
         "captured_piece": _piece_name(captured_piece),
         "gives_check": gives_check,
         "gives_mate": gives_mate,
+        "is_fork": len(attacked_targets) >= 2,
+        "landing_is_attacked": len(landing_attackers) > 0,
         "attacked_targets": attacked_targets,
         "reason": _move_reason(board, move_uci),
     }
+
+
+def _move_description(features: dict) -> str:
+    san = features.get("san") or features.get("uci") or "that move"
+    piece = features.get("piece") or "piece"
+    from_square = features.get("from_square") or "its square"
+    to_square = features.get("to_square") or "the target square"
+    return f"{san} moves the {piece} from {from_square} to {to_square}"
+
+
+def _missed_tactical_point(user_features: dict, best_features: dict) -> str | None:
+    best_move = best_features.get("san") or best_features.get("uci") or "the best move"
+
+    if best_features.get("gives_mate") and not user_features.get("gives_mate"):
+        return f"it misses checkmate; {best_move} ends the game immediately"
+
+    if best_features.get("gives_check") and not user_features.get("gives_check"):
+        return f"it misses a forcing check; {best_move} makes the king respond first"
+
+    if best_features.get("is_capture") and not user_features.get("is_capture"):
+        captured = best_features.get("captured_piece")
+        if captured:
+            return f"it misses the capture of a {captured}; {best_move} removes that target"
+        return f"it misses a capture; {best_move} wins material"
+
+    if best_features.get("is_fork") and not user_features.get("is_fork"):
+        targets = ", ".join(best_features.get("attacked_targets", [])[:2])
+        if targets:
+            return f"it misses the fork on {targets}; {best_move} attacks both targets"
+        return f"it misses the fork; {best_move} creates two threats at once"
+
+    best_targets = set(best_features.get("attacked_targets", []))
+    user_targets = set(user_features.get("attacked_targets", []))
+    missed_targets = list(best_targets - user_targets)
+    if missed_targets:
+        return f"it does not create the key threat on {missed_targets[0]}; {best_move} does"
+
+    return None
+
+
+def _wrong_move_reason(board: chess.Board, validation: dict, user_features: dict, best_features: dict) -> str:
+    user_move = user_features.get("san") or validation.get("normalized_user_move") or "your move"
+    best_move = best_features.get("san") or validation.get("normalized_best_move") or "the best move"
+
+    try:
+        user = chess.Move.from_uci(validation.get("normalized_user_move"))
+        best = chess.Move.from_uci(validation.get("normalized_best_move"))
+    except (TypeError, ValueError):
+        user = None
+        best = None
+
+    comparison = []
+    if user and best:
+        if user.from_square == best.from_square and user.to_square != best.to_square:
+            comparison.append(
+                f"you chose the right starting piece but sent it to {_square_name(user.to_square)} "
+                f"instead of {_square_name(best.to_square)}"
+            )
+        elif user.from_square != best.from_square:
+            user_piece = _piece_label(board.piece_at(user.from_square), user.from_square) or "another piece"
+            best_piece = _piece_label(board.piece_at(best.from_square), best.from_square) or "the tactic piece"
+            comparison.append(f"you moved the {user_piece}, but the tactic starts with the {best_piece}")
+
+    missed_point = _missed_tactical_point(user_features, best_features)
+    if missed_point:
+        comparison.append(missed_point)
+
+    if user_features.get("landing_is_attacked") and not best_features.get("landing_is_attacked"):
+        comparison.append(
+            f"after {user_move}, the {user_features.get('piece') or 'piece'} on "
+            f"{user_features.get('to_square')} is immediately attackable"
+        )
+
+    if not comparison:
+        comparison.append(
+            f"{_move_description(user_features)} but does not create the concrete threat that {best_move} creates"
+        )
+
+    best_reason = best_features.get("reason") or _move_reason(board, validation.get("normalized_best_move"))
+    return (
+        f"{user_move} is wrong because {'; '.join(comparison)}. "
+        f"The precise move is {best_move}: {best_reason}"
+    )
 
 
 def _fallback_explanation(
@@ -208,9 +299,11 @@ def _fallback_explanation(
     if validation.get("is_correct"):
         reason = f"Your move {user_move} is right because it matches the engine choice. {best_reason}"
     else:
-        reason = (
-            f"Your move {user_move} is legal, but its main effect is weaker: {user_reason} "
-            f"The stronger move is {best_move}. {best_reason}"
+        reason = _wrong_move_reason(
+            board=board,
+            validation=validation,
+            user_features=user_features,
+            best_features=best_features,
         )
 
     eval_note = ""
@@ -243,11 +336,14 @@ def _openai_explanation(
     context = [
         f"FEN: {puzzle.fen}",
         f"User move: {validation.get('normalized_user_move')}",
+        f"User move SAN: {validation.get('user_move_san')}",
         f"Best move: {validation.get('normalized_best_move')}",
+        f"Best move SAN: {validation.get('best_move_san')}",
         f"Is legal: {validation.get('is_legal')}",
         f"Is correct: {validation.get('is_correct')}",
         f"Puzzle theme: {puzzle.theme or 'best move training'}",
         f"Difficulty: {puzzle.difficulty}",
+        f"Precise fallback explanation: {fallback}",
     ]
 
     if move_analysis:
@@ -274,6 +370,8 @@ def _openai_explanation(
                 "instructions": (
                     "You are a chess explanation engine. Explain why the submitted puzzle move is right or wrong. "
                     "Use concrete chess language, name the user move and best move, and keep it to 2-4 short sentences. "
+                    "If the move is wrong, the first sentence must say exactly why the chosen move fails: wrong piece, "
+                    "wrong destination square, missed check, missed capture, missed fork, missed mate, or leaving a piece attacked. "
                     "Prefer specific effects such as check, mate, capture, attacked piece, fork, promotion, or king safety. "
                     "Avoid vague phrases like 'increases activity' unless you name the square or target that changed. "
                     f"Coaching personality: {coach_voice(coach_personality)['label']}. "

@@ -1,3 +1,4 @@
+import chess
 import requests
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -40,6 +41,57 @@ def _extract_output_text(response_json: dict) -> str:
     return "\n".join(chunks).strip()
 
 
+def _san_from_uci(fen: str | None, move_uci: str | None) -> str | None:
+    if not fen or not move_uci:
+        return None
+
+    try:
+        board = chess.Board(fen)
+        move = chess.Move.from_uci(move_uci)
+    except ValueError:
+        return None
+
+    if move not in board.legal_moves:
+        return None
+
+    return board.san(move)
+
+
+def _mover_eval_loss(eval_before, eval_after, color: str | None) -> str:
+    if eval_before is None or eval_after is None:
+        return "unknown"
+
+    try:
+        before = float(eval_before)
+        after = float(eval_after)
+    except (TypeError, ValueError):
+        return "unknown"
+
+    loss = after - before if color == "black" else before - after
+    if loss <= 0:
+        return "0.0 pawns"
+
+    return f"{loss:.1f} pawns"
+
+
+def _precision_instructions(feature: str) -> str:
+    if feature in {"explain-mistake", "ask"}:
+        return (
+            "For move explanations, be precise: name the played move, the best move, the evaluation loss if supplied, "
+            "and the concrete chess reason using pieces and squares from the context. Prefer 'because' explanations over "
+            "labels. Do not give a long variation unless the context contains it; if a variation is missing, say what the "
+            "candidate move is meant to achieve."
+        )
+
+    if feature == "game-summary":
+        return (
+            "When summarizing a game, cite specific move numbers and patterns from the provided mistake list instead of "
+            "generic advice."
+        )
+
+    return "Use concrete examples from the provided context before giving general advice."
+
+
 def call_openai_coach(feature: str, prompt: str, context: str, coach_personality: str | None = None) -> str:
     api_key = _require_openai_key()
     voice = coach_voice(coach_personality)
@@ -52,6 +104,7 @@ def call_openai_coach(feature: str, prompt: str, context: str, coach_personality
         "and give concrete next steps. Adapt puzzle difficulty, lesson complexity, "
         "engine-depth assumptions, and coaching language to the detected skill profile. "
         "If data is missing, say what analysis is needed next."
+        f" {_precision_instructions(feature)}"
     )
 
     try:
@@ -231,9 +284,10 @@ def move_context(db: Session, user_id: int, move_analysis_id: int) -> str:
             f"Move: {move.move_number} {move.color}",
             f"FEN before move: {move.fen_before}",
             f"Played move: {move.played_move} ({move.played_move_uci})",
-            f"Best move: {move.best_move}",
+            f"Best move: {_san_from_uci(move.fen_before, move.best_move) or move.best_move} ({move.best_move})",
             f"Evaluation before: {move.evaluation_before}",
             f"Evaluation after: {move.evaluation_after}",
+            f"Evaluation loss for mover: {_mover_eval_loss(move.evaluation_before, move.evaluation_after, move.color)}",
             f"Mistake type: {move.mistake_type}",
             f"Stored explanation: {move.explanation}",
         ]

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Keyboard, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Chess } from "chess.js";
 import { api } from "../api/client";
 import ChessboardWithArrows from "../components/ChessboardWithArrows";
 import {
@@ -73,6 +74,96 @@ export default function PuzzlesScreen({ showBack = true }) {
   }, []);
 
   const normalizeMove = (move) => (move || "").trim().toLowerCase();
+
+  const pieceName = (piece) => {
+    const names = {
+      p: "pawn",
+      n: "knight",
+      b: "bishop",
+      r: "rook",
+      q: "queen",
+      k: "king",
+    };
+
+    return names[piece] || "piece";
+  };
+
+  const moveDetails = (fen, uci) => {
+    const normalized = normalizeMove(uci);
+    if (!fen || normalized.length < 4) {
+      return null;
+    }
+
+    try {
+      const chess = new Chess(fen);
+      const from = normalized.slice(0, 2);
+      const to = normalized.slice(2, 4);
+      const move = chess.move({
+        from,
+        to,
+        promotion: normalized[4] || "q",
+      });
+
+      if (!move) {
+        return null;
+      }
+
+      return {
+        from,
+        to,
+        san: move.san,
+        piece: pieceName(move.piece),
+        captured: move.captured ? pieceName(move.captured) : null,
+        isCapture: move.flags?.includes("c") || move.flags?.includes("e"),
+        isCheck: move.san.includes("+") || move.san.includes("#"),
+        isMate: move.san.includes("#"),
+      };
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const explainContinuationMiss = (fen, userMove, expectedMove) => {
+    const user = moveDetails(fen, userMove);
+    const expected = moveDetails(fen, expectedMove?.uci);
+    const side = expectedMove?.color === "white" ? "White" : "Black";
+    const userSquares = moveToSquares(userMove);
+    const expectedSquares = moveToSquares(expectedMove?.uci);
+
+    if (!user || !expected) {
+      if (userSquares && expectedSquares) {
+        if (userSquares.from === expectedSquares.from && userSquares.to !== expectedSquares.to) {
+          return `That uses the right starting square, but it goes to ${userSquares.to} instead of ${expectedSquares.to}. The continuation is ${expectedMove?.san || expectedMove?.uci}.`;
+        }
+
+        return `That starts from ${userSquares.from}, but ${side}'s continuation starts from ${expectedSquares.from}: ${expectedMove?.san || expectedMove?.uci}.`;
+      }
+
+      return `That is not the continuation. The next move is ${expectedMove?.san || expectedMove?.uci || "the engine move"}.`;
+    }
+
+    if (user.from === expected.from && user.to !== expected.to) {
+      return `${user.san} uses the right ${user.piece}, but it goes to ${user.to} instead of ${expected.to}. The continuation is ${expected.san}.`;
+    }
+
+    if (user.from !== expected.from) {
+      return `${user.san} moves the ${user.piece} from ${user.from}, but ${side}'s continuation starts with the ${expected.piece} on ${expected.from}: ${expected.san}.`;
+    }
+
+    if (expected.isMate && !user.isMate) {
+      return `${user.san} misses checkmate. The continuation is ${expected.san}, which ends the game.`;
+    }
+
+    if (expected.isCheck && !user.isCheck) {
+      return `${user.san} misses the forcing check. The continuation is ${expected.san}, so the king must respond.`;
+    }
+
+    if (expected.isCapture && !user.isCapture) {
+      return `${user.san} misses the capture. The continuation is ${expected.san}, which takes the ${expected.captured || "target"}.`;
+    }
+
+    return `${user.san} is legal, but it does not create the continuation's threat. The next move is ${expected.san}.`;
+  };
 
   const queueAutoMove = (puzzleId, line, index) => {
     const move = line[index];
@@ -302,12 +393,13 @@ export default function PuzzlesScreen({ showBack = true }) {
     }
 
     if (normalizeMove(move) !== normalizeMove(expectedMove.uci)) {
+      const status = explainContinuationMiss(lineState.currentFen, move, expectedMove);
       setMoves((current) => ({ ...current, [puzzle.id]: move }));
       setLineByPuzzle((current) => ({
         ...current,
         [puzzle.id]: {
           ...lineState,
-          status: "That move is legal, but it is not the continuation. Try again from this position.",
+          status,
         },
       }));
       setBoardResetByPuzzle((current) => ({

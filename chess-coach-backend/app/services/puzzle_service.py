@@ -237,6 +237,46 @@ def _parse_move(board: chess.Board, move_text: str):
         return None
 
 
+def _illegal_move_feedback(board: chess.Board, move_text: str, parsed_best_move: chess.Move | None) -> str:
+    side_to_move = "White" if board.turn == chess.WHITE else "Black"
+    best_move_text = f" The best move is {board.san(parsed_best_move)}." if parsed_best_move else ""
+    normalized = (move_text or "").strip().lower()
+
+    try:
+        attempted_move = chess.Move.from_uci(normalized)
+    except ValueError:
+        return (
+            f"{side_to_move} cannot play that move from this position because the move notation is not recognized."
+            f"{best_move_text}"
+        )
+
+    from_square = chess.square_name(attempted_move.from_square)
+    to_square = chess.square_name(attempted_move.to_square)
+    piece = board.piece_at(attempted_move.from_square)
+
+    if not piece:
+        return f"{side_to_move} cannot move from {from_square} because there is no piece on that square.{best_move_text}"
+
+    piece_color = "White" if piece.color == chess.WHITE else "Black"
+    piece_name = chess.piece_name(piece.piece_type)
+    if piece.color != board.turn:
+        return (
+            f"{side_to_move} cannot move the {piece_color.lower()} {piece_name} on {from_square}; "
+            f"it is {side_to_move}'s turn.{best_move_text}"
+        )
+
+    if board.is_pseudo_legal(attempted_move):
+        return (
+            f"{side_to_move}'s {piece_name} can physically move from {from_square} to {to_square}, "
+            f"but that displacement is illegal because it leaves the king in check.{best_move_text}"
+        )
+
+    return (
+        f"The {piece_name} on {from_square} cannot move to {to_square} from this position."
+        f"{best_move_text}"
+    )
+
+
 def validate_puzzle_attempt(fen: str, user_move: str, best_move: str):
     try:
         board = chess.Board(fen)
@@ -254,7 +294,6 @@ def validate_puzzle_attempt(fen: str, user_move: str, best_move: str):
     parsed_best_move = _parse_move(board, best_move)
 
     if not parsed_user_move:
-        side_to_move = "White" if board.turn == chess.WHITE else "Black"
         return {
             "is_legal": False,
             "is_correct": False,
@@ -263,7 +302,7 @@ def validate_puzzle_attempt(fen: str, user_move: str, best_move: str):
             "user_move_san": None,
             "best_move_san": board.san(parsed_best_move) if parsed_best_move else None,
             "message": "Illegal move",
-            "feedback": f"{side_to_move} cannot play that move from this position. Try selecting a legal move first.",
+            "feedback": _illegal_move_feedback(board, user_move, parsed_best_move),
         }
 
     is_correct = parsed_best_move is not None and parsed_user_move == parsed_best_move
