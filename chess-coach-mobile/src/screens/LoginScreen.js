@@ -22,6 +22,18 @@ export default function LoginScreen() {
 
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
+  const getLoginErrorMessage = (error) => {
+    if (error.response?.data?.detail) {
+      return error.response.data.detail;
+    }
+
+    if (error.message === "Network Error") {
+      return "Could not reach the Chess Coach server. Please check your connection and try again.";
+    }
+
+    return "Something went wrong";
+  };
+
   const handleLogin = async () => {
     if (!isValidEmail(email)) {
       setEmailError("Enter a valid email address.");
@@ -34,7 +46,7 @@ export default function LoginScreen() {
     } catch (error) {
       Alert.alert(
         "Login failed",
-        error.response?.data?.detail || "Something went wrong"
+        getLoginErrorMessage(error)
       );
     }
   };

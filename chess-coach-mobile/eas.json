@@ -11,6 +11,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://chess-coach-backend-production.up.railway.app"
+      },
       "android": {
         "buildType": "app-bundle"
       },

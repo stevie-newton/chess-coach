@@ -8,13 +8,21 @@ const LOCAL_API_BASE_URL = Platform.select({
   default: "http://127.0.0.1:8000",
 });
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || LOCAL_API_BASE_URL;
+export const API_BASE_URL = __DEV__
+  ? process.env.EXPO_PUBLIC_API_BASE_URL || LOCAL_API_BASE_URL
+  : process.env.EXPO_PUBLIC_API_BASE_URL;
 const SESSION_EXPIRED_EVENT = "chess-coach:session-expired";
 const sessionExpiredListeners = new Set();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
 });
+
+if (!API_BASE_URL) {
+  console.warn(
+    "Missing EXPO_PUBLIC_API_BASE_URL. Production builds need a deployed backend URL."
+  );
+}
 
 async function clearToken() {
   if (Platform.OS === "web") {
