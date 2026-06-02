@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.game import Game
 from app.models.analysis import MoveAnalysis
 from app.services.focus_analysis_service import focus_from_game, focus_note_for_move, is_focus_move
+from app.services.move_coaching_service import premium_move_explanation_result
 from app.services.stockfish_service import best_move_for_fen
 from app.utils.chess_move_utils import parse_uci_move
 import chess
@@ -84,6 +85,12 @@ def serialize_move_analysis(move: MoveAnalysis, focus: str = "practice"):
         "focus_note": focus_note,
         "explanation": move.explanation
     }
+
+
+def move_to_coach_payload(move: MoveAnalysis, focus: str = "practice"):
+    payload = serialize_move_analysis(move, focus)
+    payload["move_id"] = move.id
+    return payload
 
 
 @router.post("/best-move")
@@ -220,4 +227,44 @@ def get_move_preview(
         "evaluation_before": move.evaluation_before,
         "evaluation_after": move.evaluation_after,
         "explanation": move.explanation
+    }
+
+
+@router.post("/move/{move_analysis_id}/coach-explanation")
+def generate_move_coach_explanation(
+    move_analysis_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    move = (
+        db.query(MoveAnalysis)
+        .join(Game, Game.id == MoveAnalysis.game_id)
+        .filter(
+            MoveAnalysis.id == move_analysis_id,
+            Game.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not move:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Move analysis not found"
+        )
+
+    focus = focus_from_game(move.game)
+    result = premium_move_explanation_result(
+        move=move_to_coach_payload(move, focus),
+        coach_personality=current_user.coach_personality,
+    )
+
+    move.explanation = result["explanation"]
+    db.commit()
+    db.refresh(move)
+
+    return {
+        "move_id": move.id,
+        "feature": "Move Coach Explanation",
+        "answer": move.explanation,
+        "source": result["source"],
     }

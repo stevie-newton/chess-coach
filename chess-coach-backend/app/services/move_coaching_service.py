@@ -149,16 +149,19 @@ def _fallback_positional_explanation(move: dict) -> str:
     )
 
 
-def premium_move_explanation(move: dict, coach_personality: str | None = None) -> str:
+def premium_move_explanation_result(move: dict, coach_personality: str | None = None) -> dict:
     """Turn engine facts into a premium coaching explanation, without inventing analysis."""
     mistake_type = move.get("mistake_type")
     if mistake_type not in ["inaccuracy", "mistake", "blunder"]:
-        return move.get("explanation") or "Good or acceptable move."
+        return {
+            "explanation": move.get("explanation") or "Good or acceptable move.",
+            "source": "stored",
+        }
 
     fallback = _fallback_positional_explanation(move)
 
     if not settings.OPENAI_API_KEY:
-        return fallback
+        return {"explanation": fallback, "source": "fallback"}
 
     voice = coach_voice(coach_personality)
     context = "\n".join(
@@ -203,11 +206,18 @@ def premium_move_explanation(move: dict, coach_personality: str | None = None) -
         )
         response.raise_for_status()
     except requests.RequestException:
-        return fallback
+        return {"explanation": fallback, "source": "fallback"}
 
     try:
         explanation = _extract_output_text(response.json())
     except ValueError:
-        return fallback
+        return {"explanation": fallback, "source": "fallback"}
 
-    return explanation or fallback
+    return {
+        "explanation": explanation or fallback,
+        "source": "openai" if explanation else "fallback",
+    }
+
+
+def premium_move_explanation(move: dict, coach_personality: str | None = None) -> str:
+    return premium_move_explanation_result(move, coach_personality)["explanation"]

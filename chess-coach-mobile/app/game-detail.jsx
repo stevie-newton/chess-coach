@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { api } from "../src/api/client";
 import ChessboardWithArrows from "../src/components/ChessboardWithArrows";
 import {
@@ -26,6 +26,7 @@ export default function GameDetail() {
   const [loading, setLoading] = useState(true);
   const [replayIndex, setReplayIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [coachLoadingByMove, setCoachLoadingByMove] = useState({});
 
   useEffect(() => {
     async function loadGameDetail() {
@@ -179,6 +180,46 @@ export default function GameDetail() {
       jumpToPosition(positionId(nextMistake));
     } else {
       jumpToPosition(positionId(mistakePositions[0]));
+    }
+  };
+
+  const updateMoveExplanation = (moveId, explanation) => {
+    const applyExplanation = (items) =>
+      items.map((item) =>
+        positionId(item) === moveId ? { ...item, explanation } : item
+      );
+
+    setPositions(applyExplanation);
+    setMistakes(applyExplanation);
+    setAnalysis((current) =>
+      current?.moves
+        ? { ...current, moves: applyExplanation(current.moves) }
+        : current
+    );
+  };
+
+  const askAiCoachForMove = async (position) => {
+    const moveId = positionId(position);
+
+    if (!moveId || coachLoadingByMove[moveId]) {
+      return;
+    }
+
+    try {
+      setCoachLoadingByMove((current) => ({ ...current, [moveId]: true }));
+      const response = await api.post(`/board/move/${moveId}/coach-explanation`);
+      updateMoveExplanation(moveId, response.data.answer);
+    } catch (error) {
+      Alert.alert(
+        "Coach unavailable",
+        error.response?.data?.detail || "Could not generate an AI coach explanation."
+      );
+    } finally {
+      setCoachLoadingByMove((current) => {
+        const next = { ...current };
+        delete next[moveId];
+        return next;
+      });
     }
   };
 
@@ -380,6 +421,13 @@ export default function GameDetail() {
               style={styles.inlineButton}
               onPress={() => jumpToPosition(positionId(mistake))}
             />
+            <SecondaryButton
+              title={coachLoadingByMove[positionId(mistake)] ? "Thinking..." : "Ask AI coach"}
+              icon="creation"
+              disabled={!!coachLoadingByMove[positionId(mistake)]}
+              style={styles.inlineButton}
+              onPress={() => askAiCoachForMove(mistake)}
+            />
           </PremiumPanel>
         ))
       ) : (
@@ -450,6 +498,15 @@ export default function GameDetail() {
               style={styles.inlineButton}
               onPress={() => jumpToPosition(positionId(position))}
             />
+            {badMoveTypes.includes(position.mistake_type) ? (
+              <SecondaryButton
+                title={coachLoadingByMove[positionId(position)] ? "Thinking..." : "Ask AI coach"}
+                icon="creation"
+                disabled={!!coachLoadingByMove[positionId(position)]}
+                style={styles.inlineButton}
+                onPress={() => askAiCoachForMove(position)}
+              />
+            ) : null}
           </PremiumPanel>
         ))
       ) : (

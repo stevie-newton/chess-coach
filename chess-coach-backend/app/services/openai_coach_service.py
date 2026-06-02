@@ -75,7 +75,8 @@ def _mover_eval_loss(eval_before, eval_after, color: str | None) -> str:
 
 
 def _precision_instructions(feature: str) -> str:
-    if feature in {"explain-mistake", "ask"}:
+    normalized_feature = feature.lower()
+    if normalized_feature in {"explain-mistake", "explain my mistake", "ask", "ask coach"}:
         return (
             "For move explanations, be precise: name the played move, the best move, the evaluation loss if supplied, "
             "and the concrete chess reason using pieces and squares from the context. Prefer 'because' explanations over "
@@ -83,7 +84,7 @@ def _precision_instructions(feature: str) -> str:
             "candidate move is meant to achieve."
         )
 
-    if feature == "game-summary":
+    if normalized_feature in {"game-summary", "game summary coach"}:
         return (
             "When summarizing a game, cite specific move numbers and patterns from the provided mistake list instead of "
             "generic advice."
