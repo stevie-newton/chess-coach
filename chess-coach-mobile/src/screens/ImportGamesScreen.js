@@ -37,7 +37,15 @@ export default function ImportGamesScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(null);
+  const [savingPgn, setSavingPgn] = useState(false);
   const [lastImport, setLastImport] = useState(null);
+  const [manualGame, setManualGame] = useState({
+    opponent: "",
+    color_played: "",
+    result: "",
+    time_control: "",
+    pgn: "",
+  });
 
   useEffect(() => {
     async function loadProfiles() {
@@ -59,6 +67,10 @@ export default function ImportGamesScreen() {
 
   const updateProfile = (field, value) => {
     setProfiles((current) => ({ ...current, [field]: value }));
+  };
+
+  const updateManualGame = (field, value) => {
+    setManualGame((current) => ({ ...current, [field]: value }));
   };
 
   const saveProfiles = async () => {
@@ -120,6 +132,47 @@ export default function ImportGamesScreen() {
     }
   };
 
+  const saveManualPgn = async () => {
+    const pgn = manualGame.pgn.trim();
+
+    if (!pgn) {
+      Alert.alert("PGN required", "Paste the complete game PGN before saving.");
+      return;
+    }
+
+    try {
+      setSavingPgn(true);
+      await api.post("/games/upload-pgn", {
+        source: "manual",
+        opponent: manualGame.opponent.trim() || null,
+        color_played: manualGame.color_played.trim().toLowerCase() || null,
+        result: manualGame.result.trim() || null,
+        time_control: manualGame.time_control.trim() || null,
+        pgn,
+      });
+
+      setManualGame({
+        opponent: "",
+        color_played: "",
+        result: "",
+        time_control: "",
+        pgn: "",
+      });
+
+      Alert.alert("Game saved", "Your tournament game was added to the library.", [
+        { text: "Stay here", style: "cancel" },
+        { text: "Analyze it", onPress: () => router.push("/(tabs)/games") },
+      ]);
+    } catch (error) {
+      Alert.alert(
+        "Could not save PGN",
+        error.response?.data?.detail || "Check that the moves are in valid PGN format."
+      );
+    } finally {
+      setSavingPgn(false);
+    }
+  };
+
   return (
     <AppShell
       showBack
@@ -171,6 +224,60 @@ export default function ImportGamesScreen() {
               onPress={saveProfiles}
             />
           </PremiumPanel>
+
+          <PremiumPanel style={styles.manualPanel}>
+            <Text style={styles.providerTitle}>Paste a tournament PGN</Text>
+            <Text style={styles.providerText}>
+              Enter the complete game notation from your score sheet, then save it for analysis.
+            </Text>
+            <View style={styles.manualGrid}>
+              <TextInput
+                style={[uiStyles.input, styles.manualField]}
+                placeholder="Opponent"
+                placeholderTextColor={palette.muted}
+                value={manualGame.opponent}
+                onChangeText={(value) => updateManualGame("opponent", value)}
+              />
+              <TextInput
+                style={[uiStyles.input, styles.manualField]}
+                placeholder="Color played: white or black"
+                placeholderTextColor={palette.muted}
+                autoCapitalize="none"
+                value={manualGame.color_played}
+                onChangeText={(value) => updateManualGame("color_played", value)}
+              />
+              <TextInput
+                style={[uiStyles.input, styles.manualField]}
+                placeholder="Result: 1-0, 0-1, or 1/2-1/2"
+                placeholderTextColor={palette.muted}
+                value={manualGame.result}
+                onChangeText={(value) => updateManualGame("result", value)}
+              />
+              <TextInput
+                style={[uiStyles.input, styles.manualField]}
+                placeholder="Time control"
+                placeholderTextColor={palette.muted}
+                value={manualGame.time_control}
+                onChangeText={(value) => updateManualGame("time_control", value)}
+              />
+            </View>
+            <TextInput
+              style={[uiStyles.input, styles.pgnInput]}
+              placeholder={'[Event "Local Tournament"]\n[White "You"]\n[Black "Opponent"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 1-0'}
+              placeholderTextColor={palette.muted}
+              multiline
+              textAlignVertical="top"
+              autoCapitalize="none"
+              value={manualGame.pgn}
+              onChangeText={(value) => updateManualGame("pgn", value)}
+            />
+            <PrimaryButton
+              title={savingPgn ? "Saving game..." : "Save PGN game"}
+              icon="content-save"
+              disabled={savingPgn}
+              onPress={saveManualPgn}
+            />
+          </PremiumPanel>
         </>
       )}
 
@@ -218,6 +325,23 @@ const styles = StyleSheet.create({
   settingsPanel: {
     gap: 12,
     marginBottom: 14,
+  },
+  manualPanel: {
+    gap: 12,
+    marginBottom: 14,
+  },
+  manualGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  manualField: {
+    flex: 1,
+    minWidth: 180,
+  },
+  pgnInput: {
+    minHeight: 190,
+    paddingTop: 12,
   },
   resultPanel: {
     gap: 6,
