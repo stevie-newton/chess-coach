@@ -810,9 +810,9 @@ export default function GameSession() {
         {coachFeedback ? <Text style={styles.pipelineText}>{coachFeedback}</Text> : null}
         {savedGame ? (
           <SecondaryButton
-            title="Open move-by-move review"
-            icon="clipboard-text-search"
-            onPress={() => router.push({ pathname: "/game-detail", params: { id: savedGame.id } })}
+            title="Open lesson review"
+            icon="school"
+            onPress={() => router.push({ pathname: "/game-detail", params: { id: savedGame.id, mode: "lesson" } })}
           />
         ) : null}
       </PremiumPanel>

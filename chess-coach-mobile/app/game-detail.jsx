@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
+import * as Speech from "expo-speech";
 import { api } from "../src/api/client";
 import ChessboardWithArrows from "../src/components/ChessboardWithArrows";
 import {
@@ -17,6 +18,81 @@ import {
 
 const badMoveTypes = ["inaccuracy", "mistake", "blunder"];
 
+function normalizeMove(move) {
+  return move?.trim().toLowerCase() || "";
+}
+
+function moveToSquares(uci, color) {
+  if (!uci || uci.length < 4) {
+    return null;
+  }
+
+  return {
+    from: uci.slice(0, 2),
+    to: uci.slice(2, 4),
+    color,
+  };
+}
+
+function describeEvalLoss(position) {
+  if (typeof position?.evaluation_before !== "number" || typeof position?.evaluation_after !== "number") {
+    return "The move missed a better practical choice in this position.";
+  }
+
+  const loss =
+    position.color === "black"
+      ? position.evaluation_after - position.evaluation_before
+      : position.evaluation_before - position.evaluation_after;
+
+  if (loss <= 0) {
+    return "The move was playable, but it missed a cleaner plan or more forcing continuation.";
+  }
+
+  return `This cost about ${loss.toFixed(1)} pawns compared with the best move.`;
+}
+
+function lessonRule(position) {
+  const bestMove = position?.best_move_san || position?.best_move || "the best move";
+
+  if (position?.tactical_miss_reason) {
+    return "When a position is forcing, check candidate moves in this order: checks, captures, threats, then quiet moves.";
+  }
+
+  if (position?.mistake_type === "blunder") {
+    return "Before you move, ask what your opponent can capture or threaten immediately.";
+  }
+
+  if (position?.mistake_type === "mistake") {
+    return `Compare your first idea with ${bestMove}; the better move usually improves a piece or creates a forcing problem.`;
+  }
+
+  return "Do not stop after finding a legal move. Look for the move that changes the opponent's options.";
+}
+
+function buildVoiceCoachScript(position, attempt = null) {
+  if (!position) {
+    return "";
+  }
+
+  const playedMove = position.played_move || position.played_move_uci || "your move";
+  const betterMove = position.best_move_san || position.best_move || "the better move";
+  const why = position.tactical_miss_reason || describeEvalLoss(position);
+  const pattern = lessonRule(position);
+  const quizLine = attempt
+    ? attempt.isCorrect
+      ? "Nice work. You found the better move."
+      : "Not quite. Replay the position and compare your move with the better move."
+    : "Now try the mini quiz from the same position.";
+
+  return [
+    `Voice coach. You played ${playedMove}.`,
+    `Why it was wrong: ${why}`,
+    `Better move: ${betterMove}.`,
+    `Pattern to remember: ${pattern}`,
+    quizLine,
+  ].join(" ");
+}
+
 export default function GameDetail() {
   const { id } = useLocalSearchParams();
   const [game, setGame] = useState(null);
@@ -27,6 +103,11 @@ export default function GameDetail() {
   const [replayIndex, setReplayIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [coachLoadingByMove, setCoachLoadingByMove] = useState({});
+  const [lessonIndex, setLessonIndex] = useState(0);
+  const [lessonAttempt, setLessonAttempt] = useState(null);
+  const [showLessonAnswer, setShowLessonAnswer] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceSpeaking, setVoiceSpeaking] = useState(false);
 
   useEffect(() => {
     async function loadGameDetail() {
@@ -94,6 +175,12 @@ export default function GameDetail() {
     return () => clearInterval(timer);
   }, [isPlaying, positions.length]);
 
+  useEffect(() => {
+    return () => {
+      Speech.stop();
+    };
+  }, []);
+
   const analyzedCount = positions.length;
   const positionId = (position) => position?.move_id ?? position?.id;
   const mistakeCount = mistakes.length || positions.filter((position) => badMoveTypes.includes(position.mistake_type)).length;
@@ -104,6 +191,8 @@ export default function GameDetail() {
   const focusedReview = analysis?.focused_review;
   const tacticalMisses = positions.filter((position) => position.tactical_miss);
   const mistakePositions = positions.filter((position) => badMoveTypes.includes(position.mistake_type));
+  const lessonPositions = mistakes.length > 0 ? mistakes : mistakePositions;
+  const activeLesson = lessonPositions[Math.min(lessonIndex, Math.max(0, lessonPositions.length - 1))] || null;
   const replayPosition = positions[replayIndex] || mistakes[0] || positions.find((position) => position.fen_before) || null;
   const currentMistakeIndex = mistakePositions.findIndex(
     (position) => positionId(position) === positionId(replayPosition)
@@ -112,21 +201,20 @@ export default function GameDetail() {
     currentMistakeIndex >= 0 && currentMistakeIndex < mistakePositions.length - 1
       ? "Next mistake"
       : "First mistake";
-  const moveToArrow = (uci, color) => {
-    if (!uci || uci.length < 4) {
-      return null;
-    }
-
-    return {
-      from: uci.slice(0, 2),
-      to: uci.slice(2, 4),
-      color,
-    };
-  };
-
   const replayArrows = [
-    moveToArrow(replayPosition?.played_move_uci, "rgba(138, 61, 82, 0.78)"),
-    moveToArrow(replayPosition?.best_move, "rgba(212, 175, 55, 0.82)"),
+    moveToSquares(replayPosition?.played_move_uci, "rgba(138, 61, 82, 0.78)"),
+    moveToSquares(replayPosition?.best_move, "rgba(212, 175, 55, 0.82)"),
+  ].filter(Boolean);
+  const lessonArrows = [
+    showLessonAnswer || lessonAttempt
+      ? moveToSquares(activeLesson?.played_move_uci, "rgba(138, 61, 82, 0.78)")
+      : null,
+    showLessonAnswer || lessonAttempt?.isCorrect
+      ? moveToSquares(activeLesson?.best_move, "rgba(30, 142, 84, 0.86)")
+      : null,
+    lessonAttempt && !lessonAttempt.isCorrect
+      ? moveToSquares(lessonAttempt.move, "rgba(201, 90, 106, 0.82)")
+      : null,
   ].filter(Boolean);
 
   const evalToPercent = (value) => {
@@ -158,6 +246,82 @@ export default function GameDetail() {
     if (nextIndex >= 0) {
       goToReplayIndex(nextIndex);
     }
+  };
+
+  const openLesson = (position) => {
+    const nextLessonIndex = lessonPositions.findIndex((item) => positionId(item) === positionId(position));
+
+    stopVoiceCoach();
+
+    if (nextLessonIndex >= 0) {
+      setLessonIndex(nextLessonIndex);
+    }
+
+    setLessonAttempt(null);
+    setShowLessonAnswer(false);
+    jumpToPosition(positionId(position));
+  };
+
+  const goToLesson = (index) => {
+    if (!lessonPositions.length) {
+      return;
+    }
+
+    stopVoiceCoach();
+
+    const nextIndex = Math.max(0, Math.min(lessonPositions.length - 1, index));
+    setLessonIndex(nextIndex);
+    setLessonAttempt(null);
+    setShowLessonAnswer(false);
+    jumpToPosition(positionId(lessonPositions[nextIndex]));
+  };
+
+  const submitLessonMove = (move) => {
+    if (!activeLesson?.best_move) {
+      return;
+    }
+
+    const normalizedMove = normalizeMove(move);
+    const normalizedBest = normalizeMove(activeLesson.best_move);
+    const isCorrect = normalizedMove === normalizedBest;
+
+    const nextAttempt = {
+      move: normalizedMove,
+      isCorrect,
+      message: isCorrect
+        ? "Correct. That is the engine move from this position."
+        : "Not quite. Compare your move with the best move and replay the forcing idea.",
+    };
+
+    setLessonAttempt(nextAttempt);
+    setShowLessonAnswer(true);
+
+    if (voiceEnabled) {
+      speakLesson(activeLesson, nextAttempt);
+    }
+  };
+
+  const speakLesson = (position = activeLesson, attempt = lessonAttempt) => {
+    const script = buildVoiceCoachScript(position, attempt);
+
+    if (!script) {
+      return;
+    }
+
+    Speech.stop();
+    setVoiceSpeaking(true);
+    Speech.speak(script, {
+      pitch: 1,
+      rate: 0.92,
+      onDone: () => setVoiceSpeaking(false),
+      onStopped: () => setVoiceSpeaking(false),
+      onError: () => setVoiceSpeaking(false),
+    });
+  };
+
+  const stopVoiceCoach = () => {
+    Speech.stop();
+    setVoiceSpeaking(false);
   };
 
   const jumpToNextMistake = () => {
@@ -293,6 +457,142 @@ export default function GameDetail() {
         ) : null}
       </PremiumPanel>
 
+      <SectionHeader label="Lesson Mode" action={lessonPositions.length > 0 ? `${Math.min(lessonIndex + 1, lessonPositions.length)}/${lessonPositions.length}` : null} />
+      {activeLesson?.fen_before ? (
+        <PremiumPanel dark style={styles.lessonPanel}>
+          <View style={styles.lessonTop}>
+            <View style={styles.lessonCopy}>
+              <Text style={styles.panelLabel}>Move {activeLesson.move_number} {activeLesson.color}</Text>
+              <Text style={styles.lessonTitle}>
+                {activeLesson.mistake_type === "blunder" ? "Fix the blunder." : "Find the better move."}
+              </Text>
+            </View>
+            <Text style={styles.badge}>{activeLesson.mistake_type}</Text>
+          </View>
+
+          <View style={styles.voicePanel}>
+            <View style={styles.voiceCopy}>
+              <Text style={styles.lessonLabel}>Voice Coach Mode</Text>
+              <Text style={styles.voiceText}>
+                Hear the lesson aloud after quiz attempts, like a coach talking through the position.
+              </Text>
+            </View>
+            <View style={styles.voiceActions}>
+              <SecondaryButton
+                title={voiceEnabled ? "Auto voice on" : "Auto voice off"}
+                icon={voiceEnabled ? "volume-high" : "volume-off"}
+                style={styles.voiceButton}
+                onPress={() => setVoiceEnabled((current) => !current)}
+              />
+              <PrimaryButton
+                title={voiceSpeaking ? "Stop" : "Speak"}
+                icon={voiceSpeaking ? "stop" : "play"}
+                tone="light"
+                style={styles.voiceButton}
+                onPress={voiceSpeaking ? stopVoiceCoach : () => speakLesson()}
+              />
+            </View>
+          </View>
+
+          <View style={styles.lessonBoardWrap}>
+            <ChessboardWithArrows
+              fen={activeLesson.fen_before}
+              boardSize={300}
+              withLetters
+              withNumbers
+              arrows={lessonArrows}
+              onMove={submitLessonMove}
+            />
+          </View>
+
+          <View style={styles.lessonGrid}>
+            <View style={styles.lessonTile}>
+              <Text style={styles.lessonLabel}>What you played</Text>
+              <Text style={styles.lessonValue}>{activeLesson.played_move || activeLesson.played_move_uci || "Unknown"}</Text>
+            </View>
+            <View style={styles.lessonTile}>
+              <Text style={styles.lessonLabel}>Better move</Text>
+              <Text style={styles.lessonValue}>
+                {showLessonAnswer ? activeLesson.best_move_san || activeLesson.best_move || "Unknown" : "Try it on the board"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.lessonBlock}>
+            <Text style={styles.lessonLabel}>Why it was wrong</Text>
+            <Text style={styles.lessonText}>{activeLesson.tactical_miss_reason || describeEvalLoss(activeLesson)}</Text>
+          </View>
+          <View style={styles.lessonBlock}>
+            <Text style={styles.lessonLabel}>Pattern to remember</Text>
+            <Text style={styles.lessonText}>{lessonRule(activeLesson)}</Text>
+          </View>
+          {activeLesson.explanation ? (
+            <View style={styles.lessonBlock}>
+              <Text style={styles.lessonLabel}>Coach explanation</Text>
+              <Text style={styles.lessonText}>{activeLesson.explanation}</Text>
+            </View>
+          ) : null}
+
+          {lessonAttempt ? (
+            <View style={[styles.lessonResult, lessonAttempt.isCorrect ? styles.lessonCorrect : styles.lessonIncorrect]}>
+              <Text style={styles.lessonResultTitle}>{lessonAttempt.isCorrect ? "Correct" : "Try again"}</Text>
+              <Text style={styles.lessonResultText}>{lessonAttempt.message}</Text>
+            </View>
+          ) : (
+            <Text style={styles.lessonHint}>Mini quiz: play the better move from this position.</Text>
+          )}
+
+          <View style={styles.lessonActions}>
+            <SecondaryButton
+              title="Previous"
+              icon="chevron-left"
+              disabled={lessonIndex <= 0}
+              style={styles.lessonButton}
+              onPress={() => goToLesson(lessonIndex - 1)}
+            />
+            <PrimaryButton
+              title="Show answer"
+              icon="eye"
+              tone="light"
+              style={styles.lessonButton}
+              onPress={() => setShowLessonAnswer(true)}
+            />
+            <SecondaryButton
+              title="Next"
+              icon="chevron-right"
+              disabled={lessonIndex >= lessonPositions.length - 1}
+              style={styles.lessonButton}
+              onPress={() => goToLesson(lessonIndex + 1)}
+            />
+          </View>
+          <View style={styles.lessonActions}>
+            <SecondaryButton
+              title={coachLoadingByMove[positionId(activeLesson)] ? "Thinking..." : "Ask AI coach"}
+              icon="creation"
+              disabled={!!coachLoadingByMove[positionId(activeLesson)]}
+              style={styles.lessonButton}
+              onPress={() => askAiCoachForMove(activeLesson)}
+            />
+            <SecondaryButton
+              title="Reset try"
+              icon="refresh"
+              style={styles.lessonButton}
+              onPress={() => {
+                setLessonAttempt(null);
+                setShowLessonAnswer(false);
+                stopVoiceCoach();
+              }}
+            />
+          </View>
+        </PremiumPanel>
+      ) : (
+        <EmptyState
+          icon="school"
+          title="No lessons yet"
+          body="Analyze a game with mistakes or blunders to unlock interactive lessons."
+        />
+      )}
+
       <SectionHeader label="Board Replay" action="Preview" />
       {replayPosition?.fen_before ? (
         <PremiumPanel style={styles.boardPanel}>
@@ -416,10 +716,10 @@ export default function GameDetail() {
             ) : null}
             <Text style={styles.explanation}>{mistake.explanation || "No explanation yet."}</Text>
             <SecondaryButton
-              title="Show on board"
-              icon="chess-board"
+              title="Start lesson"
+              icon="school"
               style={styles.inlineButton}
-              onPress={() => jumpToPosition(positionId(mistake))}
+              onPress={() => openLesson(mistake)}
             />
             <SecondaryButton
               title={coachLoadingByMove[positionId(mistake)] ? "Thinking..." : "Ask AI coach"}
@@ -455,10 +755,10 @@ export default function GameDetail() {
               <Text style={styles.focusText}>{position.focus_note}</Text>
             ) : null}
             <SecondaryButton
-              title="Review tactic"
-              icon="crosshairs-gps"
+              title="Start lesson"
+              icon="school"
               style={styles.inlineButton}
-              onPress={() => jumpToPosition(positionId(position))}
+              onPress={() => openLesson(position)}
             />
           </PremiumPanel>
         ))
@@ -550,6 +850,139 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontSize: 14,
     lineHeight: 21,
+  },
+  lessonPanel: {
+    gap: 13,
+    marginBottom: 18,
+  },
+  lessonTop: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  lessonCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  lessonTitle: {
+    color: palette.ink,
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 29,
+  },
+  lessonBoardWrap: {
+    alignItems: "center",
+    backgroundColor: palette.ivory,
+    borderColor: palette.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 8,
+  },
+  voicePanel: {
+    backgroundColor: "rgba(15,17,21,0.48)",
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+    padding: 11,
+  },
+  voiceCopy: {
+    gap: 4,
+  },
+  voiceText: {
+    color: palette.mutedDark,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  voiceActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  voiceButton: {
+    flexGrow: 1,
+    minWidth: 132,
+  },
+  lessonGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  lessonTile: {
+    backgroundColor: "rgba(15,17,21,0.58)",
+    borderColor: "rgba(255,255,255,0.12)",
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    gap: 5,
+    minWidth: 138,
+    padding: 11,
+  },
+  lessonBlock: {
+    backgroundColor: "rgba(15,17,21,0.48)",
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 5,
+    padding: 11,
+  },
+  lessonLabel: {
+    color: palette.gold,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  lessonValue: {
+    color: palette.ink,
+    fontSize: 16,
+    fontWeight: "900",
+    lineHeight: 21,
+  },
+  lessonText: {
+    color: palette.mutedDark,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+  lessonHint: {
+    color: palette.goldSoft,
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 20,
+  },
+  lessonResult: {
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 5,
+    padding: 11,
+  },
+  lessonCorrect: {
+    backgroundColor: "rgba(30,142,84,0.16)",
+    borderColor: "rgba(30,142,84,0.55)",
+  },
+  lessonIncorrect: {
+    backgroundColor: "rgba(201,90,106,0.14)",
+    borderColor: "rgba(201,90,106,0.5)",
+  },
+  lessonResultTitle: {
+    color: palette.ink,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  lessonResultText: {
+    color: palette.mutedDark,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  lessonActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  lessonButton: {
+    flexGrow: 1,
+    minWidth: 130,
   },
   focusBox: {
     backgroundColor: "rgba(15,17,21,0.58)",

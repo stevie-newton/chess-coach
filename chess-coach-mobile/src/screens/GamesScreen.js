@@ -68,6 +68,7 @@ export default function GamesScreen({ showBack = true }) {
         `Accuracy: ${response.data.accuracy}%\nMistakes: ${response.data.mistakes}\nBlunders: ${response.data.blunders}\nBest Moves: ${response.data.best_moves_found}\nGenerated puzzles: ${generatedPuzzles}${focusMessage ? `\n${focusMessage}` : ""}`,
         [
           { text: "Stay here", style: "cancel" },
+          { text: "Review lessons", onPress: () => router.push({ pathname: "/game-detail", params: { id: gameId, mode: "lesson" } }) },
           { text: "Train tactics", onPress: () => router.push("/(tabs)/puzzles") },
           { text: "Dashboard", onPress: () => router.push("/(tabs)/dashboard") },
         ]
@@ -108,6 +109,35 @@ export default function GamesScreen({ showBack = true }) {
       Alert.alert(
         "Puzzle generation failed",
         error.response?.data?.detail || "Could not generate puzzles for this game"
+      );
+    } finally {
+      clearGameAction(gameId);
+    }
+  };
+
+  const reviewGame = async (gameId) => {
+    if (actionByGame[gameId]) {
+      return;
+    }
+
+    try {
+      setGameAction(gameId, "review");
+
+      try {
+        await api.get(`/analysis/${gameId}`);
+      } catch (error) {
+        if (error.response?.status !== 404) {
+          throw error;
+        }
+
+        await api.post(`/analysis/${gameId}`);
+      }
+
+      router.push({ pathname: "/game-detail", params: { id: gameId, mode: "lesson" } });
+    } catch (error) {
+      Alert.alert(
+        "Review unavailable",
+        error.response?.data?.detail || "Could not prepare this game for review"
       );
     } finally {
       clearGameAction(gameId);
@@ -165,6 +195,13 @@ export default function GamesScreen({ showBack = true }) {
                   icon="file-document-outline"
                   style={styles.actionButton}
                   onPress={() => router.push({ pathname: "/game-detail", params: { id: game.id } })}
+                />
+                <PrimaryButton
+                  title={actionByGame[game.id] === "review" ? "Preparing..." : "Review"}
+                  icon="school"
+                  disabled={!!actionByGame[game.id]}
+                  style={styles.actionButton}
+                  onPress={() => reviewGame(game.id)}
                 />
                 <SecondaryButton
                   title={actionByGame[game.id] === "analysis" ? "Analyzing..." : "Analyze game"}

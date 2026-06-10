@@ -24,179 +24,137 @@ const trainingLinks = [
 ];
 
 const clampPercent = (value) => Math.max(0, Math.min(100, Number(value) || 0));
+const roadmapLevels = [
+  ["beginner", "Beginner", "Build reliable habits and stop the biggest one-move losses.", 35, 20, 20, 10, 15],
+  ["club_player", "Club Player", "Play complete games with basic plans and fewer simple blunders.", 55, 40, 40, 35, 40],
+  ["intermediate", "Intermediate", "Convert advantages, calculate short lines, and follow a stable repertoire.", 70, 60, 60, 60, 60],
+  ["advanced", "Advanced", "Prepare deeply, calculate under pressure, and review games like a tournament player.", 85, 78, 78, 80, 80],
+];
 
-function ProgressMetric({ label, value, detail, color = palette.gold }) {
-  const percent = clampPercent(value);
-
-  return (
-    <View style={styles.metricBlock}>
-      <View style={styles.metricHeader}>
-        <Text style={styles.metricLabel}>{label}</Text>
-        <Text style={styles.metricValue}>{percent}%</Text>
-      </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${percent}%`, backgroundColor: color }]} />
-      </View>
-      {detail ? <Text style={styles.metricDetail}>{detail}</Text> : null}
-    </View>
-  );
-}
-
-function CountBar({ label, value, max, color = palette.sage }) {
-  const percent = max > 0 ? Math.max(8, Math.round((value / max) * 100)) : 0;
-
-  return (
-    <View style={styles.countRow}>
-      <View style={styles.countLabelWrap}>
-        <Text style={styles.countLabel}>{label}</Text>
-        <Text style={styles.countValue}>{value}</Text>
-      </View>
-      <View style={styles.countTrack}>
-        <View style={[styles.countFill, { width: `${percent}%`, backgroundColor: color }]} />
-      </View>
-    </View>
-  );
-}
-
-function ProgressStatusRow({ label, status, score, detail }) {
-  const statusColor = status === "Strong" ? "#1E8E54" : status === "Weak" ? palette.danger : palette.gold;
-
-  return (
-    <View style={styles.statusRow}>
-      <View style={styles.statusCopy}>
-        <Text style={styles.statusLabel}>{label}</Text>
-        {detail ? <Text style={styles.statusDetail}>{detail}</Text> : null}
-      </View>
-      <View style={[styles.statusBadge, { borderColor: statusColor }]}>
-        <Text style={[styles.statusText, { color: statusColor }]}>{status}</Text>
-        {typeof score === "number" ? <Text style={styles.statusScore}>{Math.round(score)}%</Text> : null}
-      </View>
-    </View>
-  );
-}
-
-function YourProgress({ summary }) {
+function buildLocalRoadmap(summary) {
   const progress = summary.progress || {};
-  const puzzles = summary.puzzles || {};
-  const games = summary.games || {};
-  const openings = summary.openings || {};
-  const streaks = progress.streaks || {};
+  const skills = {
+    tactics: clampPercent(progress.tactics?.score),
+    openings: clampPercent(progress.openings?.score ?? summary.openings?.mastery),
+    endgames: clampPercent(progress.endgames?.score),
+    calculation: clampPercent((summary.progression?.calculation_completions || 0) * 5),
+    time_management: clampPercent(
+      ((summary.progression?.training_streak || summary.user?.training_streak || 0) * 3)
+      + ((summary.training?.completion_rate || 0) * 0.35)
+      + ((summary.tournaments?.win_rate || 0) * 0.25)
+    ),
+  };
+  const skillKeys = ["tactics", "openings", "endgames", "calculation", "time_management"];
+  let currentLevel = "Beginner";
+  const levels = roadmapLevels.map(([key, title, description, tactics, openings, endgames, calculation, timeManagement]) => {
+    const targets = { tactics, openings, endgames, calculation, time_management: timeManagement };
+    const skillRows = skillKeys.map((skillKey) => ({
+      key: skillKey,
+      label: skillKey.replace("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+      score: skills[skillKey],
+      target: targets[skillKey],
+      complete: skills[skillKey] >= targets[skillKey],
+    }));
+    const complete = skillRows.every((skill) => skill.complete);
+    const levelProgress = Math.round(
+      skillRows.reduce((total, skill) => total + Math.min(skill.score, skill.target) / skill.target, 0)
+      / skillRows.length
+      * 100
+    );
+
+    if (complete) {
+      currentLevel = title;
+    }
+
+    return { key, title, description, progress: levelProgress, complete, skills: skillRows };
+  });
+  const nextLevel = levels.find((level) => !level.complete) || levels[levels.length - 1];
+  const nextFocus = nextLevel.skills.reduce((weakest, skill) =>
+    skill.score / skill.target < weakest.score / weakest.target ? skill : weakest
+  );
+
+  return {
+    current_level: currentLevel,
+    next_level: nextLevel.title,
+    next_focus: nextFocus,
+    skills,
+    levels,
+  };
+}
+
+function TodayMission({ mission }) {
+  if (!mission) {
+    return null;
+  }
 
   return (
     <>
-      <SectionHeader label="Your Progress" />
-      <PremiumPanel dark style={styles.progressPanel}>
-        <ProgressStatusRow
-          label="Tactics"
-          status={progress.tactics?.label || "Improving"}
-          score={progress.tactics?.score}
-          detail={progress.tactics?.detail}
-        />
-        <ProgressStatusRow
-          label="Endgames"
-          status={progress.endgames?.label || "Weak"}
-          score={progress.endgames?.score}
-          detail={progress.endgames?.detail}
-        />
-        <ProgressStatusRow
-          label="Openings"
-          status={progress.openings?.label || "Improving"}
-          score={progress.openings?.score}
-          detail={progress.openings?.detail}
-        />
+      <SectionHeader label="Today's Mission" action={`${mission.estimated_minutes || 0} min`} />
+      <PremiumPanel dark style={styles.missionPanel}>
+        <Text style={styles.panelLabel}>{mission.focus || "Personal training"}</Text>
+        <Text style={styles.missionTitle}>{mission.title}</Text>
+        <Text style={styles.missionText}>{mission.message}</Text>
       </PremiumPanel>
-
-      <View style={styles.statsRow}>
-        <StatPill icon="chart-line" value={puzzles.rating ?? 1200} label="puzzle rating" tone="gold" />
-        <StatPill icon="bookshelf" value={`${openings.mastery ?? 0}%`} label="opening mastery" tone="sage" />
-        <StatPill icon="target" value={`${games.average_accuracy ?? 0}%`} label="accuracy" tone="wine" />
-        <StatPill icon="fire" value={streaks.training ?? 0} label="training streak" />
-        <StatPill icon="puzzle-star" value={streaks.puzzles ?? 0} label="puzzle streak" tone="gold" />
-      </View>
+      {(mission.tasks || []).map((task, index) => (
+        <FeatureRow
+          key={`${task.title}-${index}`}
+          title={task.title}
+          subtitle={task.detail}
+          icon={task.icon || "target"}
+          meta={`${task.minutes || 0}m`}
+          accent={index === 0 ? palette.gold : index === 1 ? palette.teal : palette.sage}
+          onPress={() => task.href && router.push(task.href)}
+        />
+      ))}
     </>
   );
 }
 
-function AnalyticsGraphs({ summary }) {
-  const games = summary.games || {};
-  const training = summary.training || {};
-  const puzzles = summary.puzzles || {};
-  const tournaments = summary.tournaments || {};
-  const weaknesses = summary.weaknesses || [];
-  const totalIssues = (games.total_mistakes || 0) + (games.total_blunders || 0);
-  const maxIssueCount = Math.max(games.total_mistakes || 0, games.total_blunders || 0, 1);
-  const maxWeaknessScore = Math.max(
-    ...weaknesses.map((weakness) => Math.max(weakness.severity || 0, weakness.frequency || 0)),
-    1
-  );
+function PlayerRoadmap({ roadmap }) {
+  if (!roadmap) {
+    return null;
+  }
 
   return (
     <>
-      <SectionHeader label="Analytics" action={`${games.analyzed || 0} analyzed`} />
-      <PremiumPanel style={styles.analyticsPanel}>
-        <Text style={styles.analyticsTitle}>Performance graph</Text>
-        <ProgressMetric
-          label="Average accuracy"
-          value={games.average_accuracy}
-          detail={`${games.total || 0} games imported`}
-          color={palette.gold}
-        />
-        <ProgressMetric
-          label="Training completion"
-          value={training.completion_rate}
-          detail={`${training.completed_sessions || 0} of ${training.total_sessions || 0} sessions complete`}
-          color={palette.teal}
-        />
-        <ProgressMetric
-          label="Puzzle success"
-          value={puzzles.success_rate}
-          detail={`${puzzles.correct || 0} correct from ${puzzles.attempts || 0} attempts`}
-          color={palette.sage}
-        />
-        <ProgressMetric
-          label="Tournament win rate"
-          value={tournaments.win_rate}
-          detail={`${tournaments.wins || 0} wins from ${tournaments.simulations || 0} simulations`}
-          color={palette.wine}
-        />
+      <SectionHeader label="Player Roadmap" action={roadmap.current_level} />
+      <PremiumPanel dark style={styles.roadmapPanel}>
+        <Text style={styles.panelLabel}>Next focus</Text>
+        <Text style={styles.roadmapTitle}>
+          {roadmap.next_level}: {roadmap.next_focus?.label || "Keep training"}
+        </Text>
+        <Text style={styles.roadmapText}>
+          Reach {Math.round(roadmap.next_focus?.target || 0)}% in this skill to move closer to the next level.
+        </Text>
       </PremiumPanel>
 
-      <PremiumPanel style={styles.analyticsPanel}>
-        <View style={styles.analyticsTopLine}>
-          <Text style={styles.analyticsTitle}>Mistake mix</Text>
-          <Text style={styles.analyticsBadge}>{totalIssues} issues</Text>
-        </View>
-        <CountBar label="Mistakes" value={games.total_mistakes || 0} max={maxIssueCount} color={palette.gold} />
-        <CountBar label="Blunders" value={games.total_blunders || 0} max={maxIssueCount} color={palette.wine} />
-      </PremiumPanel>
-
-      {weaknesses.length > 0 ? (
-        <PremiumPanel style={styles.analyticsPanel}>
-          <Text style={styles.analyticsTitle}>Weakness breakdown</Text>
-          {weaknesses.map((weakness) => (
-            <View key={weakness.category} style={styles.weaknessGraph}>
-              <View style={styles.weaknessTop}>
-                <Text style={styles.weaknessName}>{weakness.category}</Text>
-                <Text style={styles.weaknessMeta}>
-                  S{weakness.severity} / F{weakness.frequency}
+      {(roadmap.levels || []).map((level, index) => (
+        <PremiumPanel key={level.key} style={[styles.roadmapLevel, level.complete && styles.roadmapLevelComplete]}>
+          <View style={styles.roadmapLevelTop}>
+            <View style={styles.roadmapStep}>
+              <Text style={styles.roadmapStepText}>{index + 1}</Text>
+            </View>
+            <View style={styles.roadmapLevelCopy}>
+              <Text style={styles.roadmapLevelTitle}>{level.title}</Text>
+              <Text style={styles.roadmapLevelText}>{level.description}</Text>
+            </View>
+            <Text style={styles.roadmapPercent}>{Math.round(level.progress || 0)}%</Text>
+          </View>
+          <View style={styles.roadmapTrack}>
+            <View style={[styles.roadmapFill, { width: `${clampPercent(level.progress)}%` }]} />
+          </View>
+          <View style={styles.skillGrid}>
+            {(level.skills || []).map((skill) => (
+              <View key={skill.key} style={[styles.skillChip, skill.complete && styles.skillChipComplete]}>
+                <Text style={styles.skillChipLabel}>{skill.label}</Text>
+                <Text style={styles.skillChipValue}>
+                  {Math.round(skill.score || 0)}/{Math.round(skill.target || 0)}
                 </Text>
               </View>
-              <CountBar
-                label="Severity"
-                value={weakness.severity || 0}
-                max={maxWeaknessScore}
-                color={palette.wine}
-              />
-              <CountBar
-                label="Frequency"
-                value={weakness.frequency || 0}
-                max={maxWeaknessScore}
-                color={palette.teal}
-              />
-            </View>
-          ))}
+            ))}
+          </View>
         </PremiumPanel>
-      ) : null}
+      ))}
     </>
   );
 }
@@ -260,8 +218,8 @@ export default function DashboardScreen() {
             </Text>
           </PremiumPanel>
 
-          <YourProgress summary={summary} />
-          <AnalyticsGraphs summary={summary} />
+          <TodayMission mission={summary.today_mission} />
+          <PlayerRoadmap roadmap={summary.player_roadmap || buildLocalRoadmap(summary)} />
         </>
       ) : (
         <EmptyState
@@ -331,171 +289,123 @@ const styles = StyleSheet.create({
     color: palette.mutedDark,
     fontSize: 14,
   },
-  progressPanel: {
-    gap: 11,
-    marginBottom: 14,
+  missionPanel: {
+    gap: 8,
+    marginBottom: 11,
   },
-  statusRow: {
+  missionTitle: {
+    color: palette.ink,
+    fontSize: 22,
+    fontWeight: "900",
+    lineHeight: 27,
+  },
+  missionText: {
+    color: palette.mutedDark,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  roadmapPanel: {
+    gap: 8,
+    marginBottom: 11,
+  },
+  roadmapTitle: {
+    color: palette.ink,
+    fontSize: 21,
+    fontWeight: "900",
+    lineHeight: 26,
+  },
+  roadmapText: {
+    color: palette.mutedDark,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  roadmapLevel: {
+    gap: 12,
+    marginBottom: 11,
+  },
+  roadmapLevelComplete: {
+    borderColor: "rgba(30,142,84,0.58)",
+  },
+  roadmapLevelTop: {
     alignItems: "center",
-    backgroundColor: "rgba(15,17,21,0.54)",
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 8,
-    borderWidth: 1,
     flexDirection: "row",
     gap: 12,
-    justifyContent: "space-between",
-    minHeight: 72,
-    padding: 12,
   },
-  statusCopy: {
+  roadmapStep: {
+    alignItems: "center",
+    backgroundColor: "#3A3219",
+    borderColor: palette.gold,
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  roadmapStepText: {
+    color: palette.goldSoft,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  roadmapLevelCopy: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
-  statusLabel: {
+  roadmapLevelTitle: {
     color: palette.ink,
     fontSize: 17,
     fontWeight: "900",
   },
-  statusDetail: {
-    color: palette.mutedDark,
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 17,
-  },
-  statusBadge: {
-    alignItems: "center",
-    borderRadius: 8,
-    borderWidth: 1,
-    minWidth: 96,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  statusText: {
+  roadmapLevelText: {
+    color: palette.muted,
     fontSize: 13,
+    lineHeight: 18,
+  },
+  roadmapPercent: {
+    color: palette.gold,
+    fontSize: 15,
     fontWeight: "900",
   },
-  statusScore: {
+  roadmapTrack: {
+    backgroundColor: "#252A34",
+    borderColor: palette.line,
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 12,
+    overflow: "hidden",
+  },
+  roadmapFill: {
+    backgroundColor: palette.gold,
+    borderRadius: 8,
+    height: "100%",
+  },
+  skillGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  skillChip: {
+    backgroundColor: "rgba(15,17,21,0.48)",
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexGrow: 1,
+    minWidth: 112,
+    padding: 9,
+  },
+  skillChipComplete: {
+    backgroundColor: "rgba(30,142,84,0.14)",
+    borderColor: "rgba(30,142,84,0.42)",
+  },
+  skillChipLabel: {
     color: palette.muted,
     fontSize: 11,
     fontWeight: "900",
-    marginTop: 2,
+    textTransform: "uppercase",
   },
-  analyticsPanel: {
-    gap: 14,
-    marginBottom: 14,
-  },
-  analyticsTitle: {
+  skillChipValue: {
     color: palette.ink,
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  analyticsTopLine: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "space-between",
-  },
-  analyticsBadge: {
-    backgroundColor: "#2A2E38",
-    borderColor: palette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    color: palette.gold,
-    fontSize: 12,
-    fontWeight: "900",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  metricBlock: {
-    gap: 7,
-  },
-  metricHeader: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "space-between",
-  },
-  metricLabel: {
-    color: palette.ink,
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  metricValue: {
-    color: palette.gold,
     fontSize: 14,
     fontWeight: "900",
-  },
-  metricDetail: {
-    color: palette.muted,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  progressTrack: {
-    backgroundColor: "#252A34",
-    borderColor: palette.line,
-    borderRadius: 8,
-    borderWidth: 1,
-    height: 13,
-    overflow: "hidden",
-  },
-  progressFill: {
-    borderRadius: 8,
-    height: "100%",
-  },
-  countRow: {
-    gap: 7,
-  },
-  countLabelWrap: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "space-between",
-  },
-  countLabel: {
-    color: palette.mutedDark,
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  countValue: {
-    color: palette.ink,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  countTrack: {
-    backgroundColor: "#252A34",
-    borderRadius: 8,
-    height: 18,
-    overflow: "hidden",
-  },
-  countFill: {
-    borderRadius: 8,
-    height: "100%",
-    minWidth: 2,
-  },
-  weaknessGraph: {
-    borderTopColor: palette.line,
-    borderTopWidth: 1,
-    gap: 10,
-    paddingTop: 13,
-  },
-  weaknessTop: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "space-between",
-  },
-  weaknessName: {
-    color: palette.ink,
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "900",
-    textTransform: "capitalize",
-  },
-  weaknessMeta: {
-    color: palette.muted,
-    fontSize: 12,
-    fontWeight: "800",
+    marginTop: 3,
   },
 });

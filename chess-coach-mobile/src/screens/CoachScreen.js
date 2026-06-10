@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import {
   AppShell,
   EmptyState,
+  FeatureRow,
   LoadingState,
   PremiumPanel,
   PrimaryButton,
@@ -28,6 +29,9 @@ export default function CoachScreen({ showBack = true }) {
   const [answer, setAnswer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [coachLoading, setCoachLoading] = useState(false);
+  const [recentGames, setRecentGames] = useState([]);
+  const [gameMistakes, setGameMistakes] = useState([]);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
   const [form, setForm] = useState({
     question: "",
     gameId: "",
@@ -39,10 +43,14 @@ export default function CoachScreen({ showBack = true }) {
   });
 
   useEffect(() => {
-    async function loadFeedback() {
+    async function loadCoachData() {
       try {
-        const response = await api.get("/coach/feedback");
-        setFeedback(response.data);
+        const [feedbackResponse, gamesResponse] = await Promise.all([
+          api.get("/coach/feedback"),
+          api.get("/games/"),
+        ]);
+        setFeedback(feedbackResponse.data);
+        setRecentGames((gamesResponse.data || []).slice(0, 5));
       } catch (error) {
         console.log(error.response?.data || error.message);
       } finally {
@@ -50,12 +58,43 @@ export default function CoachScreen({ showBack = true }) {
       }
     }
 
-    loadFeedback();
+    loadCoachData();
   }, []);
 
   const updateField = (field, value) => {
     setAnswer(null);
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const selectGame = async (game) => {
+    setAnswer(null);
+    setGameMistakes([]);
+    setForm((current) => ({
+      ...current,
+      gameId: String(game.id),
+      moveAnalysisId: "",
+    }));
+
+    try {
+      setAnalysisLoading(true);
+      const response = await api.get(`/analysis/${game.id}`);
+      const mistakes = (response.data?.moves || []).filter((move) =>
+        ["inaccuracy", "mistake", "blunder"].includes(move.mistake_type)
+      );
+      setGameMistakes(mistakes.slice(0, 8));
+    } catch (error) {
+      console.log(error.response?.data || error.message);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  const selectMistake = (move) => {
+    setAnswer(null);
+    setForm((current) => ({
+      ...current,
+      moveAnalysisId: String(move.id),
+    }));
   };
 
   const runCoachFeature = async () => {
@@ -82,7 +121,7 @@ export default function CoachScreen({ showBack = true }) {
 
       if (activeFeature === "game-summary") {
         if (!form.gameId) {
-          Alert.alert("Game Summary", "Enter a game id first.");
+          Alert.alert("Game Summary", "Select a recent game first.");
           return;
         }
 
@@ -92,7 +131,7 @@ export default function CoachScreen({ showBack = true }) {
 
       if (activeFeature === "explain-mistake") {
         if (!form.moveAnalysisId) {
-          Alert.alert("Explain Mistake", "Enter a move analysis id first.");
+          Alert.alert("Explain Mistake", "Select a mistake from an analyzed game first.");
           return;
         }
 
@@ -127,6 +166,10 @@ export default function CoachScreen({ showBack = true }) {
   };
 
   const selectedFeature = features.find(([key]) => key === activeFeature);
+  const selectedGame = recentGames.find((game) => String(game.id) === form.gameId);
+  const selectedMistake = gameMistakes.find((move) => String(move.id) === form.moveAnalysisId);
+  const needsGameContext = ["ask", "game-summary", "explain-mistake"].includes(activeFeature);
+  const needsMistakeContext = ["ask", "explain-mistake"].includes(activeFeature);
 
   return (
     <AppShell
@@ -199,26 +242,58 @@ export default function CoachScreen({ showBack = true }) {
           />
         ) : null}
 
-        {["ask", "game-summary"].includes(activeFeature) ? (
-          <TextInput
-            style={uiStyles.input}
-            placeholder="Game id"
-            placeholderTextColor={palette.muted}
-            keyboardType="numeric"
-            value={form.gameId}
-            onChangeText={(value) => updateField("gameId", value)}
-          />
+        {needsGameContext ? (
+          <View style={styles.contextBlock}>
+            <Text style={styles.contextLabel}>
+              {selectedGame ? `Game context: ${selectedGame.opponent || "Unknown opponent"}` : "Choose a game context"}
+            </Text>
+            {recentGames.length > 0 ? (
+              recentGames.map((game) => (
+                <FeatureRow
+                  key={game.id}
+                  title={game.opponent || "Unknown opponent"}
+                  subtitle={`${game.result || "No result"} | ${game.color_played || "Color unknown"} | ${game.time_control || "Time control unknown"}`}
+                  icon={String(game.id) === form.gameId ? "check-circle" : "chess-pawn"}
+                  meta={`#${game.id}`}
+                  accent={String(game.id) === form.gameId ? palette.gold : palette.sage}
+                  onPress={() => selectGame(game)}
+                />
+              ))
+            ) : (
+              <Text style={styles.contextText}>Import or record a game to unlock game-aware coaching.</Text>
+            )}
+          </View>
         ) : null}
 
-        {["ask", "explain-mistake"].includes(activeFeature) ? (
-          <TextInput
-            style={uiStyles.input}
-            placeholder="Move analysis id"
-            placeholderTextColor={palette.muted}
-            keyboardType="numeric"
-            value={form.moveAnalysisId}
-            onChangeText={(value) => updateField("moveAnalysisId", value)}
-          />
+        {needsMistakeContext && form.gameId ? (
+          <View style={styles.contextBlock}>
+            <Text style={styles.contextLabel}>
+              {selectedMistake
+                ? `Mistake context: move ${selectedMistake.move_number}`
+                : analysisLoading
+                  ? "Loading analyzed mistakes..."
+                  : "Choose a mistake context"}
+            </Text>
+            {gameMistakes.length > 0 ? (
+              gameMistakes.map((move) => (
+                <FeatureRow
+                  key={move.id}
+                  title={`Move ${move.move_number}: ${move.mistake_type}`}
+                  subtitle={`Played ${move.played_move || move.played_move_uci || "unknown"} instead of ${move.best_move_san || move.best_move || "the engine move"}`}
+                  icon={String(move.id) === form.moveAnalysisId ? "check-circle" : "alert-decagram"}
+                  meta={`#${move.id}`}
+                  accent={move.mistake_type === "blunder" ? palette.wine : palette.gold}
+                  onPress={() => selectMistake(move)}
+                />
+              ))
+            ) : (
+              <Text style={styles.contextText}>
+                {analysisLoading
+                  ? "Checking this game's analysis."
+                  : "Analyze this game first to choose a specific mistake."}
+              </Text>
+            )}
+          </View>
         ) : null}
 
         {activeFeature === "weekly-plan" ? (
@@ -378,6 +453,21 @@ const styles = StyleSheet.create({
     color: palette.mutedDark,
     fontSize: 14,
     lineHeight: 20,
+  },
+  contextBlock: {
+    gap: 8,
+  },
+  contextLabel: {
+    color: palette.goldSoft,
+    fontSize: 13,
+    fontWeight: "900",
+    lineHeight: 18,
+  },
+  contextText: {
+    color: palette.muted,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
   },
   textArea: {
     minHeight: 112,

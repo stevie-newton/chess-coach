@@ -12,7 +12,7 @@ import {
   palette,
 } from "../src/components/PremiumUI";
 import OpeningBoard from "../src/components/OpeningBoard";
-import { openingLibrary, recommendedOpenings } from "../src/data/openingLibrary";
+import { openingDetails, openingLibrary, recommendedOpenings } from "../src/data/openingLibrary";
 import {
   buildAdaptiveOpeningReport,
   getOpeningProgress,
@@ -65,15 +65,84 @@ const repertoireExamples = [
   "King's Indian Defense",
 ];
 
+const repertoireSections = [
+  {
+    key: "white",
+    title: "White repertoire",
+    subtitle: "Openings you can start with the white pieces.",
+    icon: "chess-king",
+  },
+  {
+    key: "blackE4",
+    title: "Black vs 1.e4",
+    subtitle: "Defenses prepared for king-pawn games.",
+    icon: "shield-sword",
+  },
+  {
+    key: "blackD4",
+    title: "Black vs 1.d4",
+    subtitle: "Defenses prepared for queen-pawn and closed games.",
+    icon: "shield-half-full",
+  },
+  {
+    key: "backup",
+    title: "Backup lines",
+    subtitle: "Other saved systems and surprise weapons.",
+    icon: "bookmark-multiple-outline",
+  },
+];
+
 const sampleOpeningPosition = {
   fen: "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 2 3",
   bestMove: "g8f6",
   explanation: "Develop the kingside knight, attack e4, and prepare to castle while staying in the main Italian structure.",
 };
 
+function firstLineStartsWith(opening, move) {
+  return opening?.mainLine?.[0]?.replace(/\s+/g, " ").startsWith(`1. ${move}`);
+}
+
+function repertoireBucketFor(openingName) {
+  const opening = openingDetails[openingName];
+
+  if (!opening) {
+    return "backup";
+  }
+
+  if (opening.color === "White") {
+    return "white";
+  }
+
+  if (firstLineStartsWith(opening, "e4")) {
+    return "blackE4";
+  }
+
+  if (firstLineStartsWith(opening, "d4")) {
+    return "blackD4";
+  }
+
+  return "backup";
+}
+
+function buildStructuredRepertoire(savedRepertoire) {
+  return savedRepertoire.reduce(
+    (groups, opening) => {
+      groups[repertoireBucketFor(opening)].push(opening);
+      return groups;
+    },
+    {
+      white: [],
+      blackE4: [],
+      blackD4: [],
+      backup: [],
+    }
+  );
+}
+
 export default function Openings() {
   const [savedRepertoire, setSavedRepertoire] = useState([]);
   const [adaptiveReport, setAdaptiveReport] = useState([]);
+  const structuredRepertoire = buildStructuredRepertoire(savedRepertoire);
 
   useFocusEffect(
     useCallback(() => {
@@ -195,8 +264,28 @@ export default function Openings() {
       <SectionHeader label="My Repertoire" />
       <PremiumPanel style={styles.myRepertoirePanel}>
         {savedRepertoire.length ? (
-          <View style={styles.openingList}>
-            {savedRepertoire.map((opening) => renderOpeningRow(opening))}
+          <View style={styles.repertoireGroups}>
+            {repertoireSections.map((section) => (
+              <View key={section.key} style={styles.repertoireSection}>
+                <View style={styles.repertoireSectionHeader}>
+                  <View style={styles.repertoireIcon}>
+                    <MaterialCommunityIcons name={section.icon} size={20} color={palette.goldSoft} />
+                  </View>
+                  <View style={styles.repertoireCopy}>
+                    <Text style={styles.repertoireTitle}>{section.title}</Text>
+                    <Text style={styles.repertoireSubtitle}>{section.subtitle}</Text>
+                  </View>
+                  <Text style={styles.repertoireCount}>{structuredRepertoire[section.key].length}</Text>
+                </View>
+                {structuredRepertoire[section.key].length ? (
+                  <View style={styles.openingList}>
+                    {structuredRepertoire[section.key].map((opening) => renderOpeningRow(opening))}
+                  </View>
+                ) : (
+                  <Text style={styles.repertoireEmptyText}>No saved openings here yet.</Text>
+                )}
+              </View>
+            ))}
           </View>
         ) : (
           <View style={styles.emptyRepertoire}>
@@ -295,6 +384,54 @@ const styles = StyleSheet.create({
   myRepertoirePanel: {
     gap: 12,
     marginBottom: 18,
+  },
+  repertoireGroups: {
+    gap: 14,
+  },
+  repertoireSection: {
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+    padding: 11,
+  },
+  repertoireSectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  repertoireIcon: {
+    alignItems: "center",
+    backgroundColor: "#3A3219",
+    borderRadius: 8,
+    height: 38,
+    justifyContent: "center",
+    width: 38,
+  },
+  repertoireCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  repertoireTitle: {
+    color: palette.ink,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  repertoireSubtitle: {
+    color: palette.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+  },
+  repertoireCount: {
+    color: palette.gold,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  repertoireEmptyText: {
+    color: palette.muted,
+    fontSize: 13,
+    fontWeight: "700",
   },
   adaptivePanel: {
     gap: 13,
