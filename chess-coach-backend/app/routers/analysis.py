@@ -163,6 +163,24 @@ def get_analysis(
             detail="Analysis not found"
         )
 
+    player_color = (
+        game.color_played.strip().lower()
+        if game.color_played and game.color_played.strip().lower() in {"white", "black"}
+        else None
+    )
+    if player_color and any(move.color != player_color for move in moves):
+        analysis = analyze_game_and_save(
+            db=db,
+            user_id=current_user.id,
+            game=game
+        )
+        moves = (
+            db.query(MoveAnalysis)
+            .filter(MoveAnalysis.game_id == game.id)
+            .order_by(MoveAnalysis.id.asc())
+            .all()
+        )
+
     focus = focus_from_game(game)
 
     return {

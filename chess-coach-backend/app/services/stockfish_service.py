@@ -245,7 +245,7 @@ def best_move_for_fen(fen: str, depth: int | None = None):
         engine.quit()
 
 
-def analyze_pgn(pgn_text: str):
+def analyze_pgn(pgn_text: str, player_color: str | None = None):
     pgn_io = io.StringIO(pgn_text)
     game = chess.pgn.read_game(pgn_io)
 
@@ -265,6 +265,11 @@ def analyze_pgn(pgn_text: str):
             detail=f"Stockfish failed to start: {str(e)}"
         )
 
+    normalized_player_color = (
+        player_color.strip().lower()
+        if player_color and player_color.strip().lower() in {"white", "black"}
+        else None
+    )
     move_results = []
 
     inaccuracies = 0
@@ -277,6 +282,10 @@ def analyze_pgn(pgn_text: str):
             color = "white" if board.turn == chess.WHITE else "black"
             move_number = board.fullmove_number
             fen_before = board.fen()
+
+            if normalized_player_color and color != normalized_player_color:
+                board.push(move)
+                continue
 
             before_info = engine.analyse(
                 board,

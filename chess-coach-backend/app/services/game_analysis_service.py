@@ -17,6 +17,11 @@ def analyze_game_and_save(
     user_id: int,
     game: Game
 ):
+    player_color = (
+        game.color_played.strip().lower()
+        if game.color_played and game.color_played.strip().lower() in {"white", "black"}
+        else None
+    )
     existing_analysis = (
         db.query(GameAnalysis)
         .filter(GameAnalysis.game_id == game.id)
@@ -24,20 +29,29 @@ def analyze_game_and_save(
     )
 
     if existing_analysis:
-        existing_moves_count = (
+        existing_moves = (
             db.query(MoveAnalysis)
             .filter(MoveAnalysis.game_id == game.id)
-            .count()
+            .all()
         )
 
-        if existing_moves_count > 0:
+        analysis_matches_player = (
+            existing_moves
+            and (
+                player_color is None
+                or all(move.color == player_color for move in existing_moves)
+            )
+        )
+        if analysis_matches_player:
             return existing_analysis
 
+        for move in existing_moves:
+            db.delete(move)
         db.delete(existing_analysis)
         db.commit()
 
     user = db.query(User).filter(User.id == user_id).first()
-    result = analyze_pgn(game.pgn)
+    result = analyze_pgn(game.pgn, player_color=player_color)
 
     analysis = GameAnalysis(
         game_id=game.id,
