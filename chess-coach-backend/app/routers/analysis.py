@@ -73,6 +73,22 @@ def serialize_move_analysis(move: MoveAnalysis, focus: str = "practice"):
     }
 
 
+def player_color_for_game(game: Game) -> str | None:
+    if not game.color_played:
+        return None
+
+    color = game.color_played.strip().lower()
+    return color if color in {"white", "black"} else None
+
+
+def moves_for_player(game: Game, moves: list[MoveAnalysis]) -> list[MoveAnalysis]:
+    player_color = player_color_for_game(game)
+    if not player_color:
+        return moves
+
+    return [move for move in moves if move.color == player_color]
+
+
 @router.post("/{game_id}")
 def analyze_game(
     game_id: int,
@@ -112,6 +128,8 @@ def analyze_game(
         user_id=current_user.id
     )
 
+    player_moves = moves_for_player(game, moves)
+
     return {
         "message": "Game analyzed successfully",
         "game_id": game.id,
@@ -122,7 +140,7 @@ def analyze_game(
         "best_moves_found": analysis.best_moves_found,
         "generated_puzzles": len(generated_puzzles),
         "personalized_training_focus": focus,
-        "focused_review": build_focused_review(game, moves),
+        "focused_review": build_focused_review(game, player_moves),
     }
 
 
@@ -163,11 +181,7 @@ def get_analysis(
             detail="Analysis not found"
         )
 
-    player_color = (
-        game.color_played.strip().lower()
-        if game.color_played and game.color_played.strip().lower() in {"white", "black"}
-        else None
-    )
+    player_color = player_color_for_game(game)
     if player_color and any(move.color != player_color for move in moves):
         analysis = analyze_game_and_save(
             db=db,
@@ -182,6 +196,7 @@ def get_analysis(
         )
 
     focus = focus_from_game(game)
+    player_moves = moves_for_player(game, moves)
 
     return {
         "id": analysis.id,
@@ -191,6 +206,6 @@ def get_analysis(
         "mistakes": analysis.mistakes,
         "blunders": analysis.blunders,
         "best_moves_found": analysis.best_moves_found,
-        "focused_review": build_focused_review(game, moves),
-        "moves": [serialize_move_analysis(move, focus) for move in moves]
+        "focused_review": build_focused_review(game, player_moves),
+        "moves": [serialize_move_analysis(move, focus) for move in player_moves]
     }

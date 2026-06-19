@@ -87,6 +87,22 @@ def serialize_move_analysis(move: MoveAnalysis, focus: str = "practice"):
     }
 
 
+def player_color_for_game(game: Game) -> str | None:
+    if not game.color_played:
+        return None
+
+    color = game.color_played.strip().lower()
+    return color if color in {"white", "black"} else None
+
+
+def scope_moves_to_player(query, game: Game):
+    player_color = player_color_for_game(game)
+    if not player_color:
+        return query
+
+    return query.filter(MoveAnalysis.color == player_color)
+
+
 def move_to_coach_payload(move: MoveAnalysis, focus: str = "practice"):
     payload = serialize_move_analysis(move, focus)
     payload["move_id"] = move.id
@@ -120,12 +136,8 @@ def get_game_positions(
             detail="Game not found"
         )
 
-    moves = (
-        db.query(MoveAnalysis)
-        .filter(MoveAnalysis.game_id == game.id)
-        .order_by(MoveAnalysis.id.asc())
-        .all()
-    )
+    moves_query = db.query(MoveAnalysis).filter(MoveAnalysis.game_id == game.id)
+    moves = scope_moves_to_player(moves_query, game).order_by(MoveAnalysis.id.asc()).all()
 
     if not moves:
         raise HTTPException(
@@ -163,15 +175,14 @@ def get_game_mistake_positions(
             detail="Game not found"
         )
 
-    mistakes = (
+    mistakes_query = (
         db.query(MoveAnalysis)
         .filter(
             MoveAnalysis.game_id == game.id,
             MoveAnalysis.mistake_type.in_(["inaccuracy", "mistake", "blunder"])
         )
-        .order_by(MoveAnalysis.id.asc())
-        .all()
     )
+    mistakes = scope_moves_to_player(mistakes_query, game).order_by(MoveAnalysis.id.asc()).all()
 
     focus = focus_from_game(game)
 
