@@ -41,6 +41,24 @@ export default function GamesScreen({ showBack = true }) {
     loadGames();
   };
 
+  const formatPlayedAt = (value) => {
+    if (!value) {
+      return null;
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   const setGameAction = (gameId, action) => {
     setActionByGame((current) => ({ ...current, [gameId]: action }));
   };
@@ -149,7 +167,7 @@ export default function GamesScreen({ showBack = true }) {
       showBack={showBack}
       eyebrow="Game Library"
       title="Your analysis room."
-      subtitle="Imported games and coach notes appear here after you sync or upload PGNs."
+      subtitle="Recent imports and coach notes appear here after you sync or upload PGNs."
     >
       <View style={styles.statsRow}>
         <StatPill icon="chess-pawn" value={games.length} label="games" tone="gold" />
@@ -189,6 +207,9 @@ export default function GamesScreen({ showBack = true }) {
               <Text style={styles.reviewText}>
                 {game.source || "Manual"} | {game.color_played || "Color unknown"} | {game.time_control || "Time control unknown"}
               </Text>
+              {formatPlayedAt(game.played_at) ? (
+                <Text style={styles.reviewDate}>Played {formatPlayedAt(game.played_at)}</Text>
+              ) : null}
               <View style={styles.actionRow}>
                 <SecondaryButton
                   title="Details"
@@ -288,6 +309,11 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 14,
     lineHeight: 20,
+  },
+  reviewDate: {
+    color: palette.muted,
+    fontSize: 13,
+    fontWeight: "800",
   },
   actionRow: {
     flexDirection: "row",

@@ -6,6 +6,7 @@ from app.models.game import Game
 from app.models.opening import Opening, OpeningLine, OpeningPracticeAttempt
 from app.models.puzzle import PuzzleAttempt
 from app.models.user import User
+from app.utils.player_move_scope import player_move_scope_filter
 
 
 def _score_bucket(value: float, beginner_limit: float, advanced_limit: float) -> int:
@@ -67,7 +68,7 @@ def detect_skill_profile(db: Session, user: User) -> dict:
     total_moves = (
         db.query(func.count(MoveAnalysis.id))
         .join(Game, Game.id == MoveAnalysis.game_id)
-        .filter(Game.user_id == user.id)
+        .filter(Game.user_id == user.id, player_move_scope_filter())
         .scalar()
     ) or 0
 
@@ -76,6 +77,7 @@ def detect_skill_profile(db: Session, user: User) -> dict:
         .join(Game, Game.id == MoveAnalysis.game_id)
         .filter(
             Game.user_id == user.id,
+            player_move_scope_filter(),
             MoveAnalysis.mistake_type == "blunder",
         )
         .scalar()

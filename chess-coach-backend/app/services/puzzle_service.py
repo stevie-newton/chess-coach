@@ -10,6 +10,7 @@ from app.models.analysis import MoveAnalysis
 from app.models.puzzle import Puzzle
 from app.models.weakness import Weakness
 from app.services.weakness_service import update_user_weakness
+from app.utils.player_move_scope import normalized_player_color
 
 
 PIECE_VALUES = {
@@ -391,15 +392,15 @@ def generate_puzzles_from_game(db: Session, user_id: int, game):
     board = parsed_game.board()
     generated_puzzles = []
 
-    move_analyses = (
-        db.query(MoveAnalysis)
-        .filter(
-            MoveAnalysis.game_id == game.id,
-            MoveAnalysis.mistake_type.in_(["inaccuracy", "mistake", "blunder"])
-        )
-        .order_by(MoveAnalysis.id.asc())
-        .all()
+    move_query = db.query(MoveAnalysis).filter(
+        MoveAnalysis.game_id == game.id,
+        MoveAnalysis.mistake_type.in_(["inaccuracy", "mistake", "blunder"])
     )
+    player_color = normalized_player_color(game)
+    if player_color:
+        move_query = move_query.filter(MoveAnalysis.color == player_color)
+
+    move_analyses = move_query.order_by(MoveAnalysis.id.asc()).all()
 
     move_analysis_map = {}
     for move_analysis in move_analyses:

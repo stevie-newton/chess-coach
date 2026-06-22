@@ -49,7 +49,8 @@ async def import_games(
                     "opponent": game.opponent,
                     "color_played": game.color_played,
                     "result": game.result,
-                    "time_control": game.time_control
+                    "time_control": game.time_control,
+                    "played_at": game.played_at,
                 }
                 for game in games
             ]

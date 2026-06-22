@@ -178,7 +178,7 @@ export default function ImportGamesScreen() {
       showBack
       eyebrow="Import Center"
       title="Connect your chess profiles."
-      subtitle="Save public Chess.com and Lichess usernames, then import games into your coach library."
+      subtitle="Save public Chess.com and Lichess usernames, then import your most recent games into your coach library."
     >
       {loading ? (
         <LoadingState />
@@ -211,7 +211,7 @@ export default function ImportGamesScreen() {
             <Text style={styles.providerTitle}>Import settings</Text>
             <TextInput
               style={uiStyles.input}
-              placeholder="Max games"
+              placeholder="Recent games to import"
               placeholderTextColor={palette.muted}
               keyboardType="numeric"
               value={maxGames}

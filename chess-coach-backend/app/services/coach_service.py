@@ -9,6 +9,7 @@ from app.models.puzzle import PuzzleAttempt
 from app.models.tournament import TournamentSimulation
 from app.models.user import User
 from app.services.skill_profile_service import detect_skill_profile
+from app.utils.player_move_scope import player_move_scope_filter
 
 
 def generate_coach_feedback(db: Session, user_id: int):
@@ -34,6 +35,7 @@ def generate_coach_feedback(db: Session, user_id: int):
         .join(Game, Game.id == MoveAnalysis.game_id)
         .filter(
             Game.user_id == user_id,
+            player_move_scope_filter(),
             MoveAnalysis.mistake_type == "blunder"
         )
         .count()

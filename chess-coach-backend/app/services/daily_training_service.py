@@ -10,6 +10,7 @@ from app.models.analysis import MoveAnalysis
 from app.models.game import Game
 from app.models.study_schedule import StudySchedule
 from app.models.weakness import Weakness
+from app.utils.player_move_scope import player_move_scope_filter
 
 
 def _count_mistakes(db: Session, user_id: int, *filters) -> int:
@@ -18,6 +19,7 @@ def _count_mistakes(db: Session, user_id: int, *filters) -> int:
         .join(Game, Game.id == MoveAnalysis.game_id)
         .filter(
             Game.user_id == user_id,
+            player_move_scope_filter(),
             MoveAnalysis.mistake_type.in_(["inaccuracy", "mistake", "blunder"]),
             *filters,
         )

@@ -49,7 +49,7 @@ def get_my_games(
     return (
         db.query(Game)
         .filter(Game.user_id == current_user.id)
-        .order_by(Game.created_at.desc())
+        .order_by(Game.played_at.desc().nullslast(), Game.created_at.desc())
         .all()
     )
 

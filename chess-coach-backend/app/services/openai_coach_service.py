@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.weakness import Weakness
 from app.services.coaching_voice_service import coach_voice
 from app.services.skill_profile_service import detect_skill_profile
+from app.utils.player_move_scope import player_move_scope_filter
 
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
@@ -235,7 +236,9 @@ def game_context(db: Session, user_id: int, game_id: int) -> str:
     analysis = db.query(GameAnalysis).filter(GameAnalysis.game_id == game.id).first()
     moves = (
         db.query(MoveAnalysis)
+        .join(Game, Game.id == MoveAnalysis.game_id)
         .filter(MoveAnalysis.game_id == game.id)
+        .filter(player_move_scope_filter())
         .order_by(MoveAnalysis.id.asc())
         .all()
     )
@@ -273,7 +276,11 @@ def move_context(db: Session, user_id: int, move_analysis_id: int) -> str:
     move = (
         db.query(MoveAnalysis)
         .join(Game, Game.id == MoveAnalysis.game_id)
-        .filter(MoveAnalysis.id == move_analysis_id, Game.user_id == user_id)
+        .filter(
+            MoveAnalysis.id == move_analysis_id,
+            Game.user_id == user_id,
+            player_move_scope_filter(),
+        )
         .first()
     )
     if not move:

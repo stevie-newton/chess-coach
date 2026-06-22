@@ -17,6 +17,7 @@ from app.utils.chess_move_utils import parse_uci_move
 from datetime import datetime, timezone
 from app.models.mistake_replay import MistakeReplayAttempt, MistakeReviewState
 from app.services.spaced_repetition_service import update_review_state
+from app.utils.player_move_scope import player_move_scope_filter
 import chess
 
 
@@ -52,6 +53,7 @@ def get_next_mistake_replay(
         )
         .filter(
             Game.user_id == current_user.id,
+            player_move_scope_filter(),
             MoveAnalysis.mistake_type.in_(["inaccuracy", "mistake", "blunder"]),
             MoveAnalysis.best_move.isnot(None),
             (
@@ -204,7 +206,8 @@ def attempt_mistake_replay(
         .join(Game, Game.id == MoveAnalysis.game_id)
         .filter(
             MoveAnalysis.id == move_analysis_id,
-            Game.user_id == current_user.id
+            Game.user_id == current_user.id,
+            player_move_scope_filter()
         )
         .first()
     )
@@ -304,7 +307,8 @@ def get_mistake_replay_hint(
         .join(Game, Game.id == MoveAnalysis.game_id)
         .filter(
             MoveAnalysis.id == move_analysis_id,
-            Game.user_id == current_user.id
+            Game.user_id == current_user.id,
+            player_move_scope_filter()
         )
         .first()
     )

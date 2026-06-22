@@ -14,6 +14,7 @@ from app.models.tournament import TournamentSimulation
 from app.models.opening import Opening, OpeningLine, OpeningPracticeAttempt
 from app.services.progression_service import build_progression_profile
 from app.services.skill_profile_service import detect_skill_profile
+from app.utils.player_move_scope import player_move_scope_filter
 
 
 router = APIRouter(
@@ -291,6 +292,7 @@ def get_dashboard_summary(
         .join(Game, Game.id == MoveAnalysis.game_id)
         .filter(
             Game.user_id == current_user.id,
+            player_move_scope_filter(),
             MoveAnalysis.mistake_type == "blunder"
         )
         .scalar()
@@ -301,6 +303,7 @@ def get_dashboard_summary(
         .join(Game, Game.id == MoveAnalysis.game_id)
         .filter(
             Game.user_id == current_user.id,
+            player_move_scope_filter(),
             MoveAnalysis.mistake_type == "mistake"
         )
         .scalar()
